@@ -19,10 +19,20 @@ Stock GPU inference and the replacement desktop recording remain unverified.
   confirmed its isolated host stopped afterward.
 - The root filtered suite passed (seven PTY/ACL tests excluded), followed by
   focused checks for the final token changes and strict workspace Clippy.
-  The plugin's three tests and strict Clippy passed; 42 container tests passed.
+  The plugin's three tests and strict Clippy passed; 44 container tests passed, including interruption/denial cleanup and
+  refusal to replay consumed provisioning.
 - The companion app's Rust tests and strict Clippy passed. UI lint/build and
   all 48 mocked browser tests passed. Recorder/editor syntax checks passed.
   These are implementation checks, not GPU or real-conversation acceptance.
+
+- With the actual stock-main host binary and a synthetic local Hub endpoint
+  returning HTTP 503, `MESH_HF_RETRY_MAX_ATTEMPTS=0` produced one request per
+  metadata endpoint and exited with an error without retrying. This checks Hub
+  metadata failures only; it does not exercise Xet CAS or model transfer.
+- The worker sets both upstream retry controls (`MESH_HF_RETRY_MAX_ATTEMPTS`
+  and `HF_XET_CLIENT_RETRY_MAX_ATTEMPTS`) to zero and limits inference to one
+  slot, 4096 context tokens and no draft model. The Xet control was checked in
+  the pinned dependency source; actual transfer qualification remains pending.
 
 ## Still required
 

@@ -102,3 +102,11 @@ The Mac's default Rust 1.92 compiler rejects main's `AtomicUsize::try_update`.
 The unmodified main host and console built successfully using the installed
 Rust 1.95 toolchain (`just mesh`), reporting `0.78.0+g280944`. This does not
 establish full-product or remote GPU qualification.
+
+The worker carries forward the prototype's bounded download settings: both Hub
+and Xet retry limits are zero, with an isolated cache and implicit Hub credentials
+disabled. It also uses one inference slot, a 4096-token context and no draft model.
+These controls do not replace the transfer reserve, rental deadline, or independent
+cleanup. The actual main binary passed a synthetic Hub metadata-failure check;
+Xet/model transfer and the complete image size still require qualification before
+using a paid launch plan. See the validation checkpoint for the exact scope.

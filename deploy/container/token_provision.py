@@ -42,7 +42,7 @@ def packet(stream):
 def command(config):
     return ['/opt/mesh/mesh-llm', 'serve', '--model', config['model'],
             '--join-file', str(common.ROOT / 'join-token'), '--port', '9337',
-            '--console', '3131', '--no-draft', '--bind-ip', '0.0.0.0', '--bind-port', '40100']
+            '--console', '3131', '--no-draft', '--ctx-size', '4096', '--parallel', '1', '--bind-ip', '0.0.0.0', '--bind-port', '40100']
 
 
 def receive():
@@ -70,7 +70,11 @@ def receive():
                                  start_new_session=True,
                                  env={'PATH': '/usr/bin:/bin', 'HOME': str(common.ROOT),
                                       'MESH_LLM_NATIVE_RUNTIME_BUNDLE_DIR': '/opt/mesh/native-runtimes',
-                                      'HF_HUB_DISABLE_IMPLICIT_TOKEN': 'true'})
+                                      'HF_HUB_DISABLE_IMPLICIT_TOKEN': 'true',
+                                      'HF_HUB_CACHE': str(common.ROOT / 'hf-cache'),
+                                      'MESH_HF_RETRY_MAX_ATTEMPTS': '0',
+                                      'HF_XET_CLIENT_RETRY_MAX_ATTEMPTS': '0',
+                                      'MESH_LLM_ANALYTICS': '0', 'DO_NOT_TRACK': '1'})
         while child.poll() is None and time.monotonic() < deadline:
             if not announced:
                 try:
