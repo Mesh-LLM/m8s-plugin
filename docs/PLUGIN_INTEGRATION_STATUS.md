@@ -10,7 +10,7 @@ socket-path and peer-UID checks. CLI/daemon rental behavior is unchanged.
 - Plugin and controller formatting: passed.
 - Controller `RUST_TEST_THREADS=1 scripts/check --no-pty --no-acl-mutation`: passed through Terminal: 826 tests passed, 5 ignored, 7 filtered; strict Clippy passed. The initial concurrent/native failures did not recur in the serial run. Restricted-shell runs also encountered explicit socket EPERM.
 - Plugin host IPC handshake and real controller observation: not yet qualified.
-- UI build/lint/formatting and 31 mocked browser tests passed, followed by four focused compute tests. Dependencies came from the public Yarn mirror in a temporary install with original lockfile integrity; TLS verification remained enabled.
+- Desktop managed-session adapter: 24 native Rust tests, strict all-target Clippy, UI build/lint/formatting, 35 mocked browser tests and six final focused tests passed. Dedicated owner attachment is implemented; arbitrary existing-node attachment remains open. Dependencies came from the public Yarn mirror in a temporary install with original lockfile integrity; TLS verification remained enabled.
 - No new paid rentals performed for this integration.
 
 ## Required next acceptance
@@ -19,7 +19,7 @@ socket-path and peer-UID checks. CLI/daemon rental behavior is unchanged.
    client or inference host. Bind fleet authorization to owner/node/mesh.
 2. Qualify plugin IPC with real m8sd; investigate concurrent test sensitivity separately.
 3. Complete offer quote/launch/release API and expose it to the desktop.
-4. Complete desktop build/lint/browser checks and inspect rendered layouts.
+4. Qualify the native desktop and its new integration against a live managed session; mocked layouts have been inspected.
 5. Live Vast rental, verified inference and exact confirmed destruction, followed
    by a recording of that actual workflow. Mocked UI is not live acceptance.
 

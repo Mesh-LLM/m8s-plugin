@@ -44,3 +44,28 @@ operations require an authenticated attachment to the selected local node and
 owner plus explicit controller authorization. Node role alone never grants or
 removes rental authority. Verify mesh policy and persist owner/node/mesh binding;
 refuse silent fleet reassignment when the desktop changes mesh or instance.
+
+## Why keep the inference host on rented compute?
+
+A physical device and a Mesh node are different concepts. Multiple instances
+can coexist on a device when identities, ports and state directories are distinct.
+That does not automatically create separate security boundaries: processes under
+the same OS user still share much of the same trust domain.
+
+A gateway on the laptop could advertise an inference service backed by a remote
+runtime, but that is a separate backend architecture. It adds a laptop dependency
+and another authenticated transport, and requires accurate remote capacity,
+routing, failure and model reporting. It does not eliminate the need to authorize
+the rented worker or protect its model endpoint. It is not inherently more secure.
+
+For this integration, the rented container remains the certified inference host.
+The laptop's client or host role is independent of its authority to manage that
+rental. The certificate authorizes the remote node; it is not evidence that the
+owner has a local GPU. The dedicated demo owner keeps its signing material local.
+A supported owner-signing API is still needed to attach arbitrary existing nodes
+without exporting their permanent key (see P004).
+
+The desktop now ports the prior bounded rental adapter. Its fleet displays the
+verified dedicated owner, clears that display on failed observations, and keeps
+navigation within that session. It still requires the dedicated passive owner;
+general host/client attachment remains an explicit acceptance gap.
