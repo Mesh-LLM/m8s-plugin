@@ -46,7 +46,7 @@ features = ["tls-aws-lc-rs"]
 optional = true
 [dependencies.tokio]
 version = "1"
-features = ["rt", "macros", "time", "process", "io-util"]
+features = ["rt-multi-thread", "macros", "time", "process", "io-util"]
 optional = true
 [dependencies.mesh-llm-identity]
 path = "../../vendor/mesh-llm-identity"

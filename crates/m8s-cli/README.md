@@ -1034,3 +1034,22 @@ cancelled request cannot prepare or dispatch. Repeating the same authorization
 is idempotent; a different label refuses. Fresh account/inventory checks and a
 new bounded plan remain mandatory before any separately authorized attempt.
 Historical uncertain or billing-unknown holds must remain reserved.
+
+### Desktop current-mesh bridge
+
+`prototype vast-offers --credential-file /absolute/selected.env --disk-gb 80`
+returns a sanitized read-only catalog with per-GPU memory and conservative price
+components. It samples several memory classes; it is not a complete market list.
+
+`prototype vast-quote --credential-file /absolute/selected.env --account ACCOUNT
+--disk-gb 80 --offer OFFER --machine MACHINE` freshly qualifies that exact offer for Qwen 3.8 27B.
+It does not rent anything. Normal launch repeats account and price qualification.
+
+An optional `attachment` path in a launch plan selects the desktop's local owner
+bridge instead of creating an ephemeral owner client. The private descriptor has
+`port`, `capability`, and `target` (node_id, mesh_id, cert_id). It must be created
+by the desktop from a reviewed current-mesh booking; do not construct capabilities
+or export owner keys. The controller checks attachment before CREATE and again
+before provisioning, consumes its durable bootstrap nonce, then requests one
+exact certificate. It never stops the app's existing node. Existing independent
+cleanup and budget controls still apply. See P005.

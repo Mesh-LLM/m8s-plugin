@@ -45,6 +45,64 @@ impl Default for Requirements {
         }
     }
 }
+/// Sanitized, read-only catalog. A listing is not launch authorization.
+#[derive(serde::Serialize)]
+pub struct OfferCatalog {
+    pub account_id: u64,
+    pub observed_at: i64,
+    pub disk_gb: u32,
+    pub offers: Vec<CatalogOffer>,
+}
+#[derive(serde::Serialize)]
+pub struct CatalogOffer {
+    pub machine_id: NonZeroU64,
+    pub qualified_for_profile: bool,
+    pub id: NonZeroU64,
+    pub gpu_name: String,
+    pub gpu_count: u64,
+    pub gpu_memory_mib: u64,
+    pub host_memory_mib: u64,
+    pub location: String,
+    pub compute_micro_usd_per_hour: u64,
+    pub storage_micro_usd_per_hour: u64,
+    pub transfer_micro_usd_per_gb: u64,
+}
+fn catalog_offer(row: &Value, disk: u32) -> Result<CatalogOffer> {
+    let requirements = Requirements {
+        max_compute_hourly: 3_000_000,
+        ..Requirements::default()
+    };
+    let (id, compute, storage, transfer) = qualify(row, disk, requirements)?;
+    let text = |key| {
+        row.get(key)
+            .and_then(Value::as_str)
+            .filter(|v| !v.is_empty() && v.len() <= 160 && !v.chars().any(char::is_control))
+            .map(str::to_owned)
+            .ok_or(Error::Unavailable)
+    };
+    let gpu_count = number(row, "num_gpus", 1, false)?;
+    let gpu_memory_mib = number(row, "gpu_ram", 1, false)?;
+    if !(1..=16).contains(&gpu_count) || gpu_memory_mib == 0 || gpu_memory_mib > 1024 * 1024 {
+        return Err(Error::Unavailable);
+    }
+    Ok(CatalogOffer {
+        machine_id: row
+            .get("machine_id")
+            .and_then(Value::as_u64)
+            .and_then(NonZeroU64::new)
+            .ok_or(Error::Unavailable)?,
+        qualified_for_profile: false,
+        id,
+        gpu_name: text("gpu_name")?,
+        gpu_count,
+        gpu_memory_mib,
+        host_memory_mib: number(row, "cpu_ram", 1, false)?,
+        location: text("geolocation")?,
+        compute_micro_usd_per_hour: compute,
+        storage_micro_usd_per_hour: storage,
+        transfer_micro_usd_per_gb: transfer,
+    })
+}
 pub struct PreflightHttps<S> {
     transport: ReadonlyHttps<S>,
     stage: &'static str,
@@ -81,6 +139,80 @@ impl<S: FnMut() -> Result<SecretValue>> PreflightHttps<S> {
             expected,
         )
     }
+    pub fn browse(&mut self, disk_gb: u32, requirements: Requirements) -> Result<OfferCatalog> {
+        if !(1..=128).contains(&disk_gb) {
+            return Err(Error::Invalid);
+        }
+        self.stage = "vast-account-read";
+        let account = self.read("/api/v0/users/current/", None)?;
+        let account_id = account
+            .get("id")
+            .and_then(Value::as_u64)
+            .filter(|id| *id > 0)
+            .ok_or(Error::Unavailable)?;
+        self.stage = "vast-offer-read";
+        // Include a bounded sample of size classes and the qualified runtime
+        // profile, rather than burying compatible cards under cheap listings.
+        let mut offers = Vec::new();
+        for minimum in [0, 24000, 48000, 80000, u64::MAX] {
+            let mut query = json!({"allocated_storage":disk_gb,"limit":15,"type":"on-demand",
+                "verified":{"eq":true},"rentable":{"eq":true},"rented":{"eq":false},
+                "gpu_ram":{"gte":minimum},"disk_space":{"gte":disk_gb},"dph_total":{"lte":3},"order":[["dph_total","asc"]]});
+            if minimum == u64::MAX {
+                query["gpu_ram"] = json!({"gte":requirements.min_gpu_memory_mib});
+                query["num_gpus"] = json!({"eq":1});
+                query["cpu_cores_effective"] = json!({"gte":4});
+                query["geolocation"] = json!({"notin": ["CN", "CU", "IR", "KP", "SY", "RU", "BY"]});
+                query["cpu_ram"] = json!({"gte":requirements.min_host_memory_mib});
+                query["inet_down"] = json!({"gte":requirements.min_download_mbps});
+                query["direct_port_count"] = json!({"gte":2});
+                for direction in ["inet_up_cost", "inet_down_cost"] {
+                    query[direction] = json!({"lte":requirements.max_transfer_micro_usd_per_gb as f64/1_000_000.0});
+                }
+                if requirements.blackwell_sm120 {
+                    query["gpu_name"] = json!({"in":["RTX PRO 5000","RTX PRO 6000","RTX PRO 6000 WS","RTX PRO 6000 S"]});
+                    query["cuda_max_good"] = json!({"gte":12.8});
+                }
+            }
+            let value = self.read("/api/v0/bundles/", Some(query))?;
+            let rows = value
+                .get("offers")
+                .and_then(Value::as_array)
+                .filter(|rows| rows.len() <= 15)
+                .ok_or(Error::Unavailable)?;
+            for row in rows {
+                if let Ok(mut offer) = catalog_offer(row, disk_gb) {
+                    offer.qualified_for_profile =
+                        minimum == u64::MAX && qualify(row, disk_gb, requirements).is_ok();
+                    if let Some(existing) = offers
+                        .iter_mut()
+                        .find(|existing: &&mut CatalogOffer| existing.id == offer.id)
+                    {
+                        existing.qualified_for_profile |= offer.qualified_for_profile;
+                    } else {
+                        offers.push(offer);
+                    }
+                }
+            }
+        }
+        offers.sort_by_key(|offer| {
+            (
+                !offer.qualified_for_profile,
+                offer.compute_micro_usd_per_hour + offer.storage_micro_usd_per_hour,
+            )
+        });
+        let observed_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .and_then(|time| i64::try_from(time.as_secs()).ok())
+            .ok_or(Error::Unavailable)?;
+        Ok(OfferCatalog {
+            account_id,
+            observed_at,
+            disk_gb,
+            offers,
+        })
+    }
     pub fn observe(
         &mut self,
         expected_account: u64,
@@ -100,6 +232,22 @@ impl<S: FnMut() -> Result<SecretValue>> PreflightHttps<S> {
         selected_offer: Option<NonZeroU64>,
         disk_gb: u32,
         requirements: Requirements,
+    ) -> Result<DemoPreflight> {
+        self.observe_on_machine(
+            expected_account,
+            selected_offer,
+            disk_gb,
+            requirements,
+            None,
+        )
+    }
+    pub fn observe_on_machine(
+        &mut self,
+        expected_account: u64,
+        selected_offer: Option<NonZeroU64>,
+        disk_gb: u32,
+        requirements: Requirements,
+        machine_id: Option<NonZeroU64>,
     ) -> Result<DemoPreflight> {
         self.stage = "vast-sizing-validation";
         if expected_account == 0
@@ -168,6 +316,9 @@ impl<S: FnMut() -> Result<SecretValue>> PreflightHttps<S> {
             query["gpu_name"] = json!({"in": ["RTX PRO 5000", "RTX PRO 6000", "RTX PRO 6000 WS", "RTX PRO 6000 S"]});
             query["cuda_max_good"] = json!({"gte": 12.8});
         }
+        if let Some(machine) = machine_id {
+            query["machine_id"] = json!({"eq":machine.get()});
+        }
         // The API's `id` search filter does not address the returned bundle ID:
         // live observation returned no rows for an ID present in the same host
         // search. Keep a bounded catalog read and match the exact bundle locally.
@@ -182,6 +333,11 @@ impl<S: FnMut() -> Result<SecretValue>> PreflightHttps<S> {
             .ok_or(Error::Unavailable)?;
         let mut candidates = Vec::new();
         for row in rows {
+            if machine_id.is_some_and(|machine| {
+                row.get("machine_id").and_then(Value::as_u64) != Some(machine.get())
+            }) {
+                continue;
+            }
             if let Ok(candidate) = qualify(row, disk_gb, requirements) {
                 candidates.push(candidate);
             }
@@ -497,6 +653,31 @@ mod tests {
         assert!(micros(&json!(format!("0.{}", "1".repeat(33)))).is_err());
         for s in ["-1", "NaN", "1e-4", "1.2.3", ""] {
             assert!(micros(&json!(s)).is_err());
+        }
+    }
+}
+
+#[cfg(test)]
+mod catalog_tests {
+    use super::*;
+    #[test]
+    fn catalog_does_not_pool_gpu_memory_or_expose_provider_secrets() {
+        let row = json!({"id":7,"machine_id":8,"dph_total":0.25,"storage_cost":0.10,"inet_up_cost":0.01,"inet_down_cost":0.02,"rentable":true,"rented":false,"verification":"verified","num_gpus":2,"gpu_ram":24576,"cpu_ram":131072,"gpu_name":"Example GPU","geolocation":"US","secret":"do-not-project"});
+        let offer = catalog_offer(&row, 80).unwrap();
+        assert_eq!(offer.gpu_memory_mib, 24576);
+        assert_eq!(offer.gpu_count, 2);
+        let serialized = serde_json::to_string(&offer).unwrap();
+        assert!(!serialized.contains("do-not-project"));
+        for (key, value) in [
+            ("rentable", json!(false)),
+            ("verification", json!("unverified")),
+            ("num_gpus", json!(0)),
+            ("gpu_ram", json!(0)),
+            ("gpu_name", json!("bad\nname")),
+        ] {
+            let mut bad = row.clone();
+            bad[key] = value;
+            assert!(catalog_offer(&bad, 80).is_err());
         }
     }
 }

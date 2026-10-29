@@ -1,0 +1,28 @@
+{
+  "schema": "m8s.current-mesh-validation/v1",
+  "date": "2026-10-29",
+  "scope": "Experimental desktop attachment to its existing private passive client; no local model weights",
+  "attempts": [
+    {
+      "instance_id": 58294972,
+      "mesh_id": "3f18b87f5e005b2d",
+      "desktop_node_id": "fd6e5c54c2",
+      "remote_node_id": "44fec36188",
+      "certificate_delivered": true,
+      "authenticated_control_established": true,
+      "remote_discovered_in_current_mesh": true,
+      "remote_running_model": "local-gguf/sha256-7756e8943d5ec98b1cd76895d33d20b8c8bf7609a71540fc9b6fa512bdedd0de",
+      "native_node_drawer_checked": true,
+      "canary_completed": false,
+      "removal_requested_from_native_ui": true,
+      "provider_confirmed_absent": true,
+      "absence_observed_at": 1793302220,
+      "billing": "Unsettled; full 1849795 micro-USD reservation retained"
+    }
+  ],
+  "limits": [
+    "Advertised allocatable capacity is not measured free VRAM; live GPU utilization unavailable in embedded SDK.",
+    "One bounded attempt per explicitly reconciled plan; no general fleet scheduler.",
+    "Mesh-wide canary does not identify the chosen host when several peers serve the same model."
+  ]
+}

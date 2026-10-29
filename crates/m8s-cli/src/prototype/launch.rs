@@ -1,4 +1,5 @@
 //! Single paid attempt. Durable intent and independent cleanup precede create.
+use super::attachment::{Attached, Client, Signer};
 use super::owner::{self, OwnerClient, private_file, utc};
 use m8s_bootstrap::{
     BundleSettings, EndpointId, LaunchBinding,
@@ -43,9 +44,13 @@ struct Plan {
     #[serde(default)]
     control_directory: Option<PathBuf>,
     mesh: PathBuf,
+    #[serde(default)]
+    attachment: Option<PathBuf>,
     credential_file: PathBuf,
     image: String,
     offer_id: Option<NonZeroU64>,
+    #[serde(default)]
+    offer_machine_id: Option<NonZeroU64>,
     expected_account_id: u64,
     disk_gb: u32,
     owner: String,
@@ -191,7 +196,8 @@ pub(super) fn run(args: &[String]) -> Result<()> {
     if p.directory.canonicalize().map_err(|_| ERROR)? != p.directory {
         return Err(ERROR);
     }
-    let runtime = tokio::runtime::Builder::new_current_thread()
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
         .enable_all()
         .build()
         .map_err(|_| ERROR)?;
@@ -205,16 +211,18 @@ pub(super) fn run(args: &[String]) -> Result<()> {
         b.local_addr().map_err(|_| ERROR)?.port(),
     );
     drop((a, b));
-    let mut client = {
+    let mut client = if let Some(path) = &p.attachment {
+        Client::Attached(Attached::load(path)?)
+    } else {
         let _enter = runtime.enter();
-        OwnerClient::start(
+        Client::Dedicated(OwnerClient::start(
             &p.mesh,
             &p.directory.join("owner-client"),
             &signer_key,
             ports.0,
             ports.1,
             utc()? + 1800,
-        )?
+        )?)
     };
     let result = run_with_client(
         &mut p,
@@ -241,7 +249,7 @@ fn run_with_client(
     signer_key: &mesh_llm_identity::OwnerKeypair,
     owner_key: iroh::SecretKey,
     node_key: iroh::SecretKey,
-    client: &mut OwnerClient,
+    client: &mut Client,
 ) -> Result<serde_json::Value> {
     let invite = runtime.block_on(client.invite())?;
     if p.control_directory.is_some() {
@@ -261,11 +269,12 @@ fn run_with_client(
     .map_err(|_| ERROR)?;
     eprintln!("prototype stage: provider-client-initialized");
     let fresh = preflight
-        .observe_sized(
+        .observe_on_machine(
             p.expected_account_id,
             p.offer_id,
             p.disk_gb,
             p.model.requirements(),
+            p.offer_machine_id,
         )
         .map_err(|_| {
             eprintln!("preflight stage: {}", preflight.last_stage());
@@ -352,6 +361,9 @@ fn run_with_client(
         .is_some_and(|d| super::demo_control::requested(d))
     {
         return Err("prototype-down-requested-before-create");
+    }
+    if matches!(client, Client::Attached(_)) {
+        let _ = runtime.block_on(client.invite())?;
     }
     match executor
         .dispatch_prepared(&store, &intent, &mut cleanup)
@@ -461,7 +473,7 @@ async fn bootstrap(
     signer_key: &mesh_llm_identity::OwnerKeypair,
     owner_key: iroh::SecretKey,
     node_key: iroh::SecretKey,
-    client: &OwnerClient,
+    client: &mut Client,
     invite: Zeroizing<Vec<u8>>,
     access: &NodeAccess,
     host_key: &m8s_provider::vast::readonly::provisioning_log::HostPublicKey,
@@ -507,7 +519,21 @@ async fn bootstrap(
             utc()?,
         )
         .map_err(|_| ERROR)?;
-    let config = serde_json::json!({"schema":"m8s.vast-node/v1","instance_id":access.instance_id().get(),"container_id":access.instance_id().to_string(),"image_sha256":digest,"owner_endpoint":hex::encode(owner.0),"owner_signing_key":hex::encode(signer_key.verifying_key().as_bytes()),"mesh_owner_id":signer_key.owner_id(),"owner_address":"127.0.0.1:1","bind_address":"0.0.0.0:40100","trust":mesh_llm_identity::TrustStore::default(),"program":"/opt/mesh/mesh-llm","gguf":p.model.gguf(),"material_root":"/var/lib/m8s/material","model":p.model.label(),"heartbeat_ttl_seconds":30,"max_lifetime_seconds":1800,"port":9337,"console_port":3131});
+    let (signing_key, mesh_owner_id) = match &client {
+        Client::Dedicated(_) => (
+            *signer_key.verifying_key().as_bytes(),
+            signer_key.owner_id(),
+        ),
+        Client::Attached(attached) => {
+            tokio::task::block_in_place(|| attached.invite())?;
+            (attached.signing_key, attached.owner_id.clone())
+        }
+    };
+    private_file(&p.directory.join("desktop-node.json"), &serde_json::to_vec(&serde_json::json!({
+        "node_id":node_key.public().fmt_short().to_string(), "instance_id":access.instance_id().get(),
+        "owner_id":mesh_owner_id,"model":p.model.request_model(),"image":p.image
+    })).map_err(|_| ERROR)?)?;
+    let config = serde_json::json!({"schema":"m8s.vast-node/v1","instance_id":access.instance_id().get(),"container_id":access.instance_id().to_string(),"image_sha256":digest,"owner_endpoint":hex::encode(owner.0),"owner_signing_key":hex::encode(signing_key),"mesh_owner_id":mesh_owner_id,"owner_address":"127.0.0.1:1","bind_address":"0.0.0.0:40100","trust":mesh_llm_identity::TrustStore::default(),"program":"/opt/mesh/mesh-llm","gguf":p.model.gguf(),"material_root":"/var/lib/m8s/material","model":p.model.label(),"heartbeat_ttl_seconds":30,"max_lifetime_seconds":1800,"port":9337,"console_port":3131});
     let packet = ProvisionPacket::new(
         &config,
         SecretValue::new(nonce.to_vec()),
@@ -526,11 +552,16 @@ async fn bootstrap(
     eprintln!("prototype stage: ssh-provision-sent");
     provision.wait_listening().await?;
     eprintln!("prototype stage: provisioned-control-listener-ready");
-    let pin =
-        Mp001TrustPin::new(owner, *signer_key.verifying_key().as_bytes()).map_err(|_| ERROR)?;
-    let mut signer = Mp001NodeSigner::new(signer_key, &pin, 1800, 5).map_err(|_| ERROR)?;
+    let pin = Mp001TrustPin::new(owner, signing_key).map_err(|_| ERROR)?;
+    let port = client.port();
+    let mut signer = match client {
+        Client::Dedicated(_) => {
+            Signer::Dedicated(Mp001NodeSigner::new(signer_key, &pin, 1800, 5).map_err(|_| ERROR)?)
+        }
+        Client::Attached(attached) => Signer::Attached(attached),
+    };
     let verifier = Mp001CertificateVerifier::new(
-        Mp001TrustPin::new(owner, *signer_key.verifying_key().as_bytes()).map_err(|_| ERROR)?,
+        Mp001TrustPin::new(owner, signing_key).map_err(|_| ERROR)?,
         mesh_llm_identity::TrustStore::default(),
     )
     .map_err(|_| ERROR)?;
@@ -550,7 +581,6 @@ async fn bootstrap(
         },
         bootstrap_timeout: Duration::from_secs(60),
     };
-    let port = client.port;
     let model = p.model;
     let directory = p.directory.clone();
     let remaining = expires
@@ -564,13 +594,15 @@ async fn bootstrap(
     let result = store.with_bootstrapped_node(&endpoint,plan,&mut signer,&verifier,|_| async move {
         eprintln!("prototype stage: certificate-delivered-control-established");
         let completion = tokio::task::spawn_blocking(move || {
-            super::model_wait::wait(port,model.request_model(),if matches!(model, DemoModel::Qwen38) { work_deadline } else { (Instant::now()+Duration::from_secs(300)).min(work_deadline) }).map_err(|_| m8s_bootstrap::Error::Unavailable)?;
+            let discovered = super::model_wait::wait_exact(port,&[model.request_model(),model.served()],if matches!(model, DemoModel::Qwen38) { work_deadline } else { (Instant::now()+Duration::from_secs(300)).min(work_deadline) }).map_err(|_| m8s_bootstrap::Error::Unavailable)?;
             eprintln!("prototype stage: owner-routed-model-observed");
             if matches!(model, DemoModel::Flint) {
                 return super::benchmark::run(port, model.served(), work_deadline, &directory)
                     .map_err(|_| m8s_bootstrap::Error::Unavailable);
             }
-            let body = serde_json::to_vec(&model.completion_request()).map_err(|_| m8s_bootstrap::Error::Unavailable)?;
+            let mut request = model.completion_request();
+            request["model"] = serde_json::json!(discovered);
+            let body = serde_json::to_vec(&request).map_err(|_| m8s_bootstrap::Error::Unavailable)?;
             let bytes = super::http::exchange(port,&body,(Instant::now()+Duration::from_secs(60)).min(work_deadline)).map_err(|_| m8s_bootstrap::Error::Unavailable)?;
             let value = super::project(&bytes,model.served()).map_err(|_| m8s_bootstrap::Error::Unavailable)?;
             eprintln!("prototype stage: owner-routed-inference-completed");
@@ -582,6 +614,55 @@ async fn bootstrap(
     let _ = provision.stop().await;
     endpoint.close().await;
     result
+}
+
+pub(super) fn quote(args: &[String]) -> Result<()> {
+    if !matches!(args.len(), 8 | 10)
+        || args[0] != "--credential-file"
+        || args[2] != "--account"
+        || args[4] != "--disk-gb"
+        || args[6] != "--offer"
+        || (args.len() == 10 && args[8] != "--machine")
+    {
+        return Err("invalid-quote-arguments");
+    }
+    let key = credential(Path::new(&args[1]))?;
+    let mut client = m8s_provider::vast::readonly::preflight::PreflightHttps::new(|| {
+        Ok(SecretValue::new(key.expose().to_vec()))
+    })
+    .map_err(|_| ERROR)?;
+    let quote = client
+        .observe_on_machine(
+            args[3].parse().map_err(|_| ERROR)?,
+            Some(args[7].parse().map_err(|_| ERROR)?),
+            args[5].parse().map_err(|_| ERROR)?,
+            DemoModel::Qwen38.requirements(),
+            if args.len() == 10 {
+                Some(args[9].parse().map_err(|_| ERROR)?)
+            } else {
+                None
+            },
+        )
+        .map_err(|_| client.transport_failure().unwrap_or(client.last_stage()))?;
+    println!("{}", serde_json::to_string(&quote).map_err(|_| ERROR)?);
+    Ok(())
+}
+
+pub(super) fn offers(args: &[String]) -> Result<()> {
+    if args.len() != 4 || args[0] != "--credential-file" || args[2] != "--disk-gb" {
+        return Err("invalid-offer-arguments");
+    }
+    let key = credential(Path::new(&args[1]))?;
+    let disk = args[3].parse().map_err(|_| ERROR)?;
+    let mut client = m8s_provider::vast::readonly::preflight::PreflightHttps::new(|| {
+        Ok(SecretValue::new(key.expose().to_vec()))
+    })
+    .map_err(|_| ERROR)?;
+    let offers = client
+        .browse(disk, DemoModel::Qwen38.requirements())
+        .map_err(|_| "vast-catalog-unavailable")?;
+    println!("{}", serde_json::to_string(&offers).map_err(|_| ERROR)?);
+    Ok(())
 }
 
 pub(super) fn preflight(args: &[String]) -> Result<()> {

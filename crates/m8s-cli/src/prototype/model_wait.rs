@@ -25,7 +25,18 @@ fn listed(bytes: &[u8], expected: &str) -> bool {
         && models.data.iter().filter(|m| m.id == expected).count() == 1
 }
 
+#[allow(dead_code)] // Used by the standalone prototype when prototype-vast is disabled.
 pub(super) fn wait(port: u16, model: &str, deadline: Instant) -> Result<(), &'static str> {
+    wait_exact(port, &[model], deadline).map(|_| ())
+}
+
+// SDK versions may expose the pinned HF alias or its exact native source identity.
+// Return the identity actually discovered so the one inference request uses it.
+pub(super) fn wait_exact<'a>(
+    port: u16,
+    models: &[&'a str],
+    deadline: Instant,
+) -> Result<&'a str, &'static str> {
     loop {
         let now = Instant::now();
         if now >= deadline {
@@ -33,16 +44,20 @@ pub(super) fn wait(port: u16, model: &str, deadline: Instant) -> Result<(), &'st
         }
         let attempt_deadline = (now + Duration::from_secs(1)).min(deadline);
         if let Ok(bytes) = super::http::models(port, attempt_deadline)
-            && listed(&bytes, model)
             && Instant::now() < deadline
+            && let Some(model) = select(&bytes, models)
         {
-            return Ok(());
+            return Ok(model);
         }
         // Only GET is retried. The caller sends at most one inference POST.
         if let Some(left) = deadline.checked_duration_since(Instant::now()) {
             std::thread::sleep(left.min(Duration::from_millis(100)));
         }
     }
+}
+
+fn select<'a>(bytes: &[u8], models: &[&'a str]) -> Option<&'a str> {
+    models.iter().copied().find(|model| listed(bytes, model))
 }
 
 #[cfg(test)]
@@ -64,6 +79,31 @@ mod tests {
         ] {
             assert!(!listed(bytes, "selected"));
         }
+    }
+    #[test]
+    fn discovery_selects_only_a_pinned_identity() {
+        let candidates = ["pinned-hf-alias", "exact-native-source"];
+        assert_eq!(
+            select(
+                br#"{"object":"list","data":[{"id":"exact-native-source"}]}"#,
+                &candidates
+            ),
+            Some("exact-native-source")
+        );
+        assert_eq!(
+            select(
+                br#"{"object":"list","data":[{"id":"pinned-hf-alias"}]}"#,
+                &candidates
+            ),
+            Some("pinned-hf-alias")
+        );
+        assert_eq!(
+            select(
+                br#"{"object":"list","data":[{"id":"other-source"}]}"#,
+                &candidates
+            ),
+            None
+        );
     }
     #[test]
     fn expired_wait_never_connects() {
