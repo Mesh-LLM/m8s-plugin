@@ -13,7 +13,7 @@ Their scope is the opt-in prototype, not an approved production fleet design.
 | [P003](P003-runtime-and-readiness.md) | Implemented; live demonstrated | Immutable prepared runtime and owner-routed model acceptance |
 | [P004](P004-restart-and-execution-domains.md) | Source integration; deterministic qualification | Immutable restart inputs, atomic removal, isolated execution domains |
 | [P005](P005-plugin-and-desktop.md) | Accepted direction; integration in progress | Plugin publication, experimental desktop, authenticated owner attachment |
-| [P006](P006-current-mesh-attachment.md) | Current-mesh attachment and removal live demonstrated; inference qualification in progress | App-owned signing bridge and exact-offer review |
+| [P006](P006-current-mesh-attachment.md) | Current-mesh attachment and removal live demonstrated; inference not yet live qualified | App-owned signing bridge and exact-offer review |
 
 See the [roadmap](../ROADMAP.md) for remaining work and acceptance conditions.
 
