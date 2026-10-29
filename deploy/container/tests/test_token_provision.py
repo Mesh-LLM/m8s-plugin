@@ -48,11 +48,11 @@ class TokenProvisionTests(unittest.TestCase):
             self.assertFalse((root / 'join-token').exists())
             self.assertTrue((root / 'provision-consumed').exists())
     def test_denied_admission_and_interruption_stop_worker_and_erase_token(self):
-        for interrupted in (False, True):
-            with self.subTest(interrupted=interrupted), tempfile.TemporaryDirectory() as directory:
+        for interrupted, already_exited in ((False, False), (True, False), (False, True)):
+            with self.subTest(interrupted=interrupted, already_exited=already_exited), tempfile.TemporaryDirectory() as directory:
                 root=Path(directory);(root/'instance-id').write_text('123')
                 config=self.config();config['lifetime_seconds']=2
-                child=Mock(pid=456);child.poll.return_value=None
+                child=Mock(pid=456);child.poll.return_value=1 if already_exited else None
                 opener=Mock();opener.open.side_effect=OSError('synthetic denied/unready endpoint')
                 output=io.StringIO()
                 with patch.object(target.common,'ROOT',root), \
@@ -70,8 +70,9 @@ class TokenProvisionTests(unittest.TestCase):
                 self.assertEqual(spawn.call_args.kwargs['env']['MESH_HF_RETRY_MAX_ATTEMPTS'],'0')
                 self.assertEqual(spawn.call_args.kwargs['env']['HF_XET_CLIENT_RETRY_MAX_ATTEMPTS'],'0')
                 self.assertEqual(spawn.call_args.kwargs['env']['MESH_LLM_NO_DEFAULT_PLUGINS'],'1')
-                kill.assert_called_once_with(456,target.signal.SIGTERM)
-                child.wait.assert_called_once_with(timeout=3)
+                self.assertEqual([c.args for c in kill.call_args_list], [(456,target.signal.SIGTERM),(456,target.signal.SIGKILL)])
+                self.assertEqual(child.wait.call_count,2)
+                self.assertEqual(child.wait.call_args_list[0].kwargs,{'timeout':3})
                 self.assertFalse((root/'join-token').exists())
                 self.assertEqual(output.getvalue(),'')
                 self.assertTrue((root/'provision-consumed').exists())

@@ -94,12 +94,22 @@ def receive():
             time.sleep(0.25)
     finally:
         try:
-            if child is not None and child.poll() is None:
-                os.killpg(child.pid, signal.SIGTERM)
+            if child is not None:
+                # A host exit may leave children in its session. Always stop
+                # the group, even when poll() has already reaped the host.
+                try:
+                    os.killpg(child.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
                 try:
                     child.wait(timeout=3)
                 except subprocess.TimeoutExpired:
-                    os.killpg(child.pid, signal.SIGKILL)
+                    pass
+                finally:
+                    try:
+                        os.killpg(child.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
                     child.wait()
         finally:
             (common.ROOT / 'join-token').unlink(missing_ok=True)

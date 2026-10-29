@@ -20,7 +20,8 @@ Stock GPU inference and the replacement desktop recording remain unverified.
 - The root filtered suite passed (seven PTY/ACL tests excluded), followed by
   focused checks for the final token changes and strict workspace Clippy.
   The plugin's four tests and strict Clippy passed; 44 container tests passed, including interruption/denial cleanup and
-  refusal to replay consumed provisioning.
+  refusal to replay consumed provisioning and process-group cleanup after the
+  host exits before its children.
 - Built the release plugin archive with `plugin/package.sh`. Stock main installed
   it through `plugins install --archive`, discovered `m8s.compute` from the local
   plugin store, and completed the MCP status call. No command-path override was
