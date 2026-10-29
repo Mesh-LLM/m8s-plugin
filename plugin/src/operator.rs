@@ -179,6 +179,64 @@ async fn verify_target(target: &Value) -> Result<Value> {
     );
     Ok(status)
 }
+// Read-only booking estimate. The controller independently performs durable
+// budget admission and fresh provider checks before CREATE.
+fn quote_estimate(plan: &Value, prices: &Value, at: i64) -> anyhow::Result<u64> {
+    let get = |value: &Value| {
+        value
+            .as_u64()
+            .ok_or_else(|| anyhow::anyhow!("Missing budget amount"))
+    };
+    let policy = &plan["policy"];
+    let quote = &plan["request"]["quote"];
+    let runtime = get(&quote["runtime_seconds"])?;
+    let cleanup = get(&quote["cleanup_seconds"])?;
+    let seconds = runtime
+        .checked_add(cleanup)
+        .ok_or_else(|| anyhow::anyhow!("Invalid duration"))?;
+    anyhow::ensure!(
+        runtime > 0
+            && runtime <= get(&policy["max_runtime_seconds"])?
+            && seconds <= 1800
+            && cleanup >= get(&policy["minimum_cleanup_seconds"])?
+            && cleanup >= 240,
+        "Invalid duration"
+    );
+    let end = at
+        .checked_add(seconds as i64)
+        .ok_or_else(|| anyhow::anyhow!("Invalid deadline"))?;
+    anyhow::ensure!(
+        policy["valid_from"].as_i64().is_some_and(|v| v <= at)
+            && policy["valid_until"].as_i64().is_some_and(|v| v >= end),
+        "Approval expired"
+    );
+    let contingency = get(&quote["contingency"])?;
+    anyhow::ensure!(
+        contingency >= get(&policy["minimum_contingency"])? && contingency > 0,
+        "Invalid reserve"
+    );
+    let compute = (u128::from(get(&prices["compute_micro_usd_per_hour"])?) * u128::from(seconds))
+        .div_ceil(3600);
+    let storage = (u128::from(get(&prices["storage_micro_usd_per_hour"])?) * u128::from(seconds))
+        .div_ceil(3600);
+    let total = compute
+        + storage
+        + u128::from(get(&prices["transfer_micro_usd_per_gb"])?) * 64
+        + u128::from(contingency);
+    let hourly = (total * 3600).div_ceil(u128::from(runtime));
+    let baseline = &policy["baseline"];
+    anyhow::ensure!(
+        total + u128::from(get(&baseline["prior_lifetime_spent"])?)
+            <= u128::from(get(&policy["trial_all_in"])?)
+            && total + u128::from(get(&baseline["prior_current_period_spent"])?)
+                <= u128::from(get(&policy["monthly_all_in"])?)
+            && hourly <= u128::from(get(&policy["instance_hourly"])?)
+            && hourly <= u128::from(get(&policy["total_hourly"])?),
+        "Budget does not cover the full reserve"
+    );
+    Ok(u64::try_from(total)?)
+}
+
 fn worker_present(status: &Value, ready: &Value) -> bool {
     status["is_host"] == false
         && status["peers"].as_array().is_some_and(|peers| {
@@ -235,6 +293,7 @@ async fn execute_config(c: &Config, request: Request) -> Result<Value> {
             ]);
             let prices = c.cli(args).await?;
             ensure!(prices["offer_id"] == offer_id, "Offer changed");
+            let estimate = quote_estimate(&c.plan, &prices, i64::try_from(now())?)?;
             let mut nonce = [0u8; 32];
             getrandom::fill(&mut nonce).map_err(|_| anyhow::anyhow!("Randomness unavailable"))?;
             let id = nonce.iter().map(|b| format!("{b:02x}")).collect::<String>();
@@ -243,7 +302,7 @@ async fn execute_config(c: &Config, request: Request) -> Result<Value> {
             plan["offer_machine_id"] = json!(machine_id);
             let quote = json!({"quote_id":id,"expires_at":now()+30,"plan":plan,"target":target,"prices":prices});
             write_new(&c.root.join(format!("quote-{id}.json")), &quote)?;
-            json!({"quote_id":id,"expires_at":quote["expires_at"],"model":"Qwen 3.8 27B · token-only v0","target":{"node_id":target["node_id"],"mesh_id":target["mesh_id"]},"cap_micro_usd":c.cap()?,"prices":prices,"admission":"token-only-provider-trusted","certificate_verified":false})
+            json!({"quote_id":id,"expires_at":quote["expires_at"],"model":"Qwen 3.8 27B · token-only v0","target":{"node_id":target["node_id"],"mesh_id":target["mesh_id"]},"cap_micro_usd":c.cap()?,"estimated_reserve_micro_usd":estimate,"prices":prices,"admission":"token-only-provider-trusted","certificate_verified":false})
         }
         Request::Launch { quote_id } => {
             ensure!(
@@ -373,6 +432,38 @@ mod lifecycle_tests {
             atomic::{AtomicBool, Ordering},
         },
     };
+    fn budget_plan(at: i64) -> Value {
+        json!({"policy":{"trial_all_in":6000010,"monthly_all_in":6000010,"baseline":{"prior_lifetime_spent":10,"prior_current_period_spent":10},"max_runtime_seconds":1500,"minimum_cleanup_seconds":240,"valid_from":at-1,"valid_until":at+1800,"minimum_contingency":1000000,"instance_hourly":18000000,"total_hourly":18000000},"request":{"quote":{"runtime_seconds":1500,"cleanup_seconds":240,"contingency":1000000}}})
+    }
+    #[test]
+    fn quote_covers_transfer_cleanup_and_contingency_before_booking() {
+        let prices = json!({"compute_micro_usd_per_hour":1800000,"storage_micro_usd_per_hour":50000,"transfer_micro_usd_per_gb":4000});
+        let plan = budget_plan(1000);
+        assert_eq!(quote_estimate(&plan, &prices, 1000).unwrap(), 2_150_167);
+        for field in [
+            "trial_all_in",
+            "monthly_all_in",
+            "instance_hourly",
+            "total_hourly",
+        ] {
+            let mut short = plan.clone();
+            short["policy"][field] = json!(1_000_000);
+            assert!(quote_estimate(&short, &prices, 1000).is_err(), "{field}");
+        }
+        let mut expensive = prices.clone();
+        expensive["transfer_micro_usd_per_gb"] = json!(100_000);
+        assert!(quote_estimate(&plan, &expensive, 1000).is_err());
+        let mut incomplete = prices.clone();
+        incomplete
+            .as_object_mut()
+            .unwrap()
+            .remove("transfer_micro_usd_per_gb");
+        assert!(quote_estimate(&plan, &incomplete, 1000).is_err());
+        assert!(quote_estimate(&plan, &prices, 2000).is_err());
+        let mut no_cleanup = plan.clone();
+        no_cleanup["request"]["quote"]["cleanup_seconds"] = json!(239);
+        assert!(quote_estimate(&no_cleanup, &prices, 1000).is_err());
+    }
     #[tokio::test]
     async fn quote_then_one_launch_retains_intent_and_requires_exact_cleanup() {
         let root = tempfile::tempdir().unwrap();
@@ -417,15 +508,42 @@ mod lifecycle_tests {
         )
         .unwrap();
         let cli = root.join("controller");
-        fs::write(&cli,format!("#!/bin/sh\nif [ \"$2\" = vast-quote ]; then printf '%s' '{{\"offer_id\":7}}'; exit 0; fi\nif [ \"$2\" = launch ]; then test -f '{}/operator-intent.json' || exit 1; printf 'invoked' > '{}/invoked'; exit 0; fi\nexit 1\n",root.display(),root.display())).unwrap();
+        fs::write(&cli,format!("#!/bin/sh\nif [ \"$2\" = vast-quote ]; then printf '%s' '{{\"offer_id\":7,\"compute_micro_usd_per_hour\":1800000,\"storage_micro_usd_per_hour\":50000,\"transfer_micro_usd_per_gb\":4000}}'; exit 0; fi\nif [ \"$2\" = launch ]; then test -f '{}/operator-intent.json' || exit 1; printf 'invoked' > '{}/invoked'; exit 0; fi\nexit 1\n",root.display(),root.display())).unwrap();
         fs::set_permissions(&cli, fs::Permissions::from_mode(0o700)).unwrap();
         let attempt = root.join("attempt");
         fs::create_dir(&attempt).unwrap();
+        let mut plan = budget_plan(now() as i64);
+        for (key, value) in json!({"control_directory":root,"directory":attempt,"token_target":target,"credential_file":"/synthetic/key.env","expected_account_id":42,"image":"test-image"}).as_object().unwrap() { plan[key] = value.clone(); }
         let c = Config {
             cli,
             root: root.clone(),
-            plan: json!({"control_directory":root,"directory":attempt,"token_target":target,"credential_file":"/synthetic/key.env","expected_account_id":42,"image":"test-image","policy":{"trial_all_in":6000010,"baseline":{"prior_lifetime_spent":10}}}),
+            plan,
         };
+        let mut underfunded = Config {
+            cli: c.cli.clone(),
+            plan: c.plan.clone(),
+            root: c.root.clone(),
+        };
+        underfunded.plan["policy"]["trial_all_in"] = json!(1_000_010);
+        assert!(
+            execute_config(
+                &underfunded,
+                Request::Quote {
+                    offer_id: 7,
+                    machine_id: 9
+                }
+            )
+            .await
+            .is_err()
+        );
+        assert!(!root.join("operator-intent.json").exists());
+        assert!(!fs::read_dir(&root).unwrap().any(|entry| {
+            entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with("quote-")
+        }));
         let quote = execute_config(
             &c,
             Request::Quote {
@@ -435,6 +553,7 @@ mod lifecycle_tests {
         )
         .await
         .unwrap();
+        assert_eq!(quote["result"]["estimated_reserve_micro_usd"], 2_150_167);
         let id = quote["result"]["quote_id"].as_str().unwrap().to_owned();
         assert!(
             execute_config(

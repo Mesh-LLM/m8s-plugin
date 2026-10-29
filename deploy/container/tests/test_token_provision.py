@@ -69,6 +69,7 @@ class TokenProvisionTests(unittest.TestCase):
                     with self.assertRaises(InterruptedError if interrupted else ValueError):target.receive()
                 self.assertEqual(spawn.call_args.kwargs['env']['MESH_HF_RETRY_MAX_ATTEMPTS'],'0')
                 self.assertEqual(spawn.call_args.kwargs['env']['HF_XET_CLIENT_RETRY_MAX_ATTEMPTS'],'0')
+                self.assertEqual(spawn.call_args.kwargs['env']['MESH_LLM_NO_DEFAULT_PLUGINS'],'1')
                 kill.assert_called_once_with(456,target.signal.SIGTERM)
                 child.wait.assert_called_once_with(timeout=3)
                 self.assertFalse((root/'join-token').exists())

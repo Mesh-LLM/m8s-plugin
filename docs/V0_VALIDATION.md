@@ -19,8 +19,21 @@ Stock GPU inference and the replacement desktop recording remain unverified.
   confirmed its isolated host stopped afterward.
 - The root filtered suite passed (seven PTY/ACL tests excluded), followed by
   focused checks for the final token changes and strict workspace Clippy.
-  The plugin's three tests and strict Clippy passed; 44 container tests passed, including interruption/denial cleanup and
+  The plugin's four tests and strict Clippy passed; 44 container tests passed, including interruption/denial cleanup and
   refusal to replay consumed provisioning.
+- Built the release plugin archive with `plugin/package.sh`. Stock main installed
+  it through `plugins install --archive`, discovered `m8s.compute` from the local
+  plugin store, and completed the MCP status call. No command-path override was
+  used for this installed-package check; the isolated host stopped afterward.
+- The shared quote operation now estimates compute, storage, the 64 GB transfer
+  reserve, cleanup and contingency before returning a booking quote. Tests cover
+  lifetime/monthly/hourly limits, missing prices, expiry and insufficient cleanup;
+  refused quotes create neither a quote file nor launch intent. Controller budget
+  admission remains independent and authoritative at launch.
+- A read-only live Vast check through the rebuilt app and release plugin returned
+  offers and a budget-qualified quote bound to the app's selected mesh. No launch
+  intent or rental was created. This expired observation is not a price promise
+  or permission to reuse the quote; a live run needs a new quote and inventory.
 - The companion app's Rust tests and strict Clippy passed. UI lint/build and
   all 48 mocked browser tests passed. Recorder/editor syntax checks passed.
   These are implementation checks, not GPU or real-conversation acceptance.

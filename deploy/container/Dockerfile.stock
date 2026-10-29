@@ -1,4 +1,4 @@
-# Stock-Mesh v0 worker. Supply a complete official upstream Linux CUDA product,
+# Stock-Mesh v0 worker. Supply a complete unmodified upstream Linux CUDA product,
 # built from the recorded main revision using upstream `just` recipes.
 # No private fork, patches, owner keys, tokens, weights, or provider secrets.
 ARG RUNTIME_BASE
@@ -11,7 +11,7 @@ RUN test -n "$STOCK_PRODUCT_SHA256" \
     && tar --extract --gzip --file=/tmp/stock-product.tar.gz --directory=/opt/mesh --strip-components=1 \
     && rm /tmp/stock-product.tar.gz \
     && test -x /opt/mesh/mesh-llm
-RUN apt-get update && apt-get install -y --no-install-recommends openssh-server python3 tini \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libgomp1 libdbus-1-3 openssh-server python3 tini \
     && rm -f /etc/ssh/ssh_host_* && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 65532 m8s \
     && useradd --uid 65532 --gid 65532 --no-create-home --home-dir /var/lib/m8s --shell /bin/sh --password '*' m8s \

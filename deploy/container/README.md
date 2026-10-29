@@ -10,7 +10,8 @@ explains the earlier certified private-fork demonstrations. They are not v0 proo
 
 `Dockerfile.stock` packages a complete unmodified upstream Linux CUDA product,
 `token_provision.py`, and the shared restricted SSH setup in `vast_provision.py`.
-It contains no model weights or owner signing key. Mesh downloads the pinned
+It contains no model weights or owner signing key. Default plugin loading is
+disabled on the worker; the owner runs the m8s plugin. Mesh downloads the pinned
 Qwen artifact after receiving the join token over host-key-verified SSH stdin.
 
 Build the full native runtime, host, console and product archive using upstream

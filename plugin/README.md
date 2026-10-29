@@ -17,7 +17,9 @@ The plugin inherits `M8S_CLI` and `M8S_V0_PLAN` from its host. These must select
 owned executable and a private, explicit token-only launch plan; no request can
 change credentials, target files, image or financial policy. One durable attempt
 per control directory; a consumed intent is never reset by a tool call. Quotes
-expire after 30 seconds. Launch independently rechecks provider conditions and
+expire after 30 seconds. Quotes include a conservative full reserve estimate
+and reject prices that exceed the selected plan, including transfer, cleanup
+and contingency. Launch independently rechecks provider conditions and
 budget before CREATE. Do not treat an offer/quote as a rental or readiness proof.
 
 The standalone `m8s-plugin --request` mode reads the same operation JSON on stdin

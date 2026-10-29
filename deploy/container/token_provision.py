@@ -70,6 +70,7 @@ def receive():
                                  start_new_session=True,
                                  env={'PATH': '/usr/bin:/bin', 'HOME': str(common.ROOT),
                                       'MESH_LLM_NATIVE_RUNTIME_BUNDLE_DIR': '/opt/mesh/native-runtimes',
+                                      'MESH_LLM_NO_DEFAULT_PLUGINS': '1',
                                       'HF_HUB_DISABLE_IMPLICIT_TOKEN': 'true',
                                       'HF_HUB_CACHE': str(common.ROOT / 'hf-cache'),
                                       'MESH_HF_RETRY_MAX_ATTEMPTS': '0',
