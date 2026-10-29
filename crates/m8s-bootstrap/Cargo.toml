@@ -1,0 +1,52 @@
+[package]
+name = "m8s-bootstrap"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rusqlite.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+
+[features]
+default = []
+mp001-certificates = ["dep:mesh-llm-identity", "dep:serde", "dep:serde_json", "dep:hex", "dep:ed25519-dalek"]
+mp001-owner-signing = ["mp001-certificates"]
+iroh-transport = ["dep:iroh", "dep:tokio"]
+
+[dependencies.iroh]
+version = "=1.3.0"
+default-features = false
+features = ["tls-aws-lc-rs"]
+optional = true
+
+[dependencies.tokio]
+version = "1"
+features = ["rt", "macros", "net", "time", "io-util"]
+optional = true
+
+[dependencies.mesh-llm-identity]
+path = "../../vendor/mesh-llm-identity"
+optional = true
+default-features = false
+
+[dependencies.serde]
+workspace = true
+optional = true
+
+[dependencies.serde_json]
+workspace = true
+optional = true
+
+[dependencies.hex]
+version = "0.4"
+optional = true
+
+[dependencies.ed25519-dalek]
+version = "=3.0.0"
+optional = true
+
+[dev-dependencies]
+ed25519-dalek = "=3.0.0"

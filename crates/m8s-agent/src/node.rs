@@ -1,0 +1,482 @@
+//! Sealed bootstrap material -> enforcing mesh argv, not admission or Ready proof.
+//! The optional vast-node binary composes this seam. The trusted coordinator must
+//! obtain a real TLS bundle, bind its actual local endpoint/key and current policy,
+//! and retain control/DMS plus scoped destruction. No owner key is loaded here.
+pub mod container;
+pub(crate) mod diagnostics;
+pub mod model;
+mod preflight;
+mod process;
+#[cfg(feature = "secure-runtime")]
+pub mod runtime;
+use crate::supervisor::ChildSpec;
+use m8s_bootstrap::mp001::Mp001CertificateVerifier;
+use m8s_bootstrap::transport::ReceivedBundle;
+use m8s_bootstrap::{
+    CertificateClaims, CertificateVerifier, ControlAcl, EndpointId, NodeCertificate,
+};
+use std::{
+    fs::{self, File},
+    io::Write,
+    os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("node launch policy refused")]
+    Policy,
+    #[error("native node identity unavailable or mismatched")]
+    NativeId,
+    #[error("node certificate refused")]
+    Certificate,
+    #[error("node material unavailable; partial private artifacts may remain")]
+    Material,
+}
+type Result<T> = std::result::Result<T, Error>;
+/// Explicit trusted launch inputs; never reconstruct from remote claims.
+/// Paths must be explicit canonical files; node_key is the ALREADY-created fresh
+/// node key used by the bootstrap endpoint, not an owner key. Its canonical format
+/// and endpoint match remain native mesh responsibilities, not inferred from mode.
+pub struct MeshLaunch {
+    pub program: PathBuf,
+    /// Local fixture, or None to let MeshLLM resolve the selected pinned model.
+    pub gguf: Option<PathBuf>,
+    pub node_key: PathBuf,
+    pub owner: EndpointId,
+    pub node: EndpointId,
+    pub mesh_owner_id: String,
+    pub model: String,
+    pub heartbeat_ttl_seconds: u64,
+    pub port: u16,
+    pub console_port: u16,
+    /// Required when `gguf` is None: the resolved file must match before serving.
+    pub model_pin: Option<model::ModelPin>,
+}
+#[derive(Clone, Copy)]
+enum Kind {
+    Ancestor,
+    Directory,
+    Private,
+    Binary,
+    Model,
+}
+struct Anchor {
+    path: PathBuf,
+    file: File,
+    kind: Kind,
+    uid: u32,
+    dev: u64,
+    ino: u64,
+    mode: u32,
+    len: u64,
+}
+impl Anchor {
+    fn open(path: &Path, kind: Kind) -> Result<Self> {
+        if !path.is_absolute()
+            || path
+                .canonicalize()
+                .map_err(|_| Error::Material)?
+                .as_os_str()
+                != path.as_os_str()
+        {
+            return Err(Error::Material);
+        }
+        let mut options = fs::OpenOptions::new();
+        options
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+        if matches!(kind, Kind::Directory | Kind::Ancestor) {
+            options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_DIRECTORY);
+        }
+        let file = options.open(path).map_err(|_| Error::Material)?;
+        Self::capture(path, file, kind)
+    }
+    fn capture(path: &Path, file: File, kind: Kind) -> Result<Self> {
+        let m = file.metadata().map_err(|_| Error::Material)?;
+        let anchor = Self {
+            path: path.into(),
+            file,
+            kind,
+            uid: m.uid(),
+            dev: m.dev(),
+            ino: m.ino(),
+            mode: m.mode(),
+            len: m.len(),
+        };
+        anchor.check()?;
+        Ok(anchor)
+    }
+    fn check(&self) -> Result<()> {
+        m8s_secrets::check_no_extended_acl(&self.file).map_err(|_| Error::Material)?;
+        let m = self.file.metadata().map_err(|_| Error::Material)?;
+        let p = fs::symlink_metadata(&self.path).map_err(|_| Error::Material)?;
+        let uid = nix::unistd::Uid::effective().as_raw();
+        if m.dev() != self.dev
+            || m.ino() != self.ino
+            || m.uid() != self.uid
+            || m.mode() != self.mode
+            || p.dev() != self.dev
+            || p.ino() != self.ino
+            || p.uid() != self.uid
+            || p.mode() != self.mode
+            || p.file_type().is_symlink()
+        {
+            return Err(Error::Material);
+        }
+        match self.kind {
+            Kind::Ancestor => {
+                if !m.is_dir()
+                    || !p.is_dir()
+                    || (self.uid != uid && self.uid != 0)
+                    || (m.mode() & 0o022 != 0 && !(self.uid == 0 && m.mode() & 0o1000 != 0))
+                {
+                    return Err(Error::Material);
+                }
+            }
+            Kind::Directory => {
+                if !m.is_dir() || !p.is_dir() || self.uid != uid || m.mode() & 0o7777 != 0o700 {
+                    return Err(Error::Material);
+                }
+            }
+            _ => {
+                if !m.is_file()
+                    || !p.is_file()
+                    || m.nlink() != 1
+                    || p.nlink() != 1
+                    || m.len() != self.len
+                    || p.len() != self.len
+                {
+                    return Err(Error::Material);
+                }
+                match self.kind {
+                    Kind::Private => {
+                        if self.uid != uid || m.mode() & 0o7777 != 0o600 || self.len > 512 * 1024 {
+                            return Err(Error::Material);
+                        }
+                    }
+                    Kind::Binary | Kind::Model => {
+                        if (self.uid != uid && self.uid != 0)
+                            || m.mode() & 0o7022 != 0
+                            || self.len == 0
+                            || (matches!(self.kind, Kind::Binary) && m.mode() & 0o111 == 0)
+                        {
+                            return Err(Error::Material);
+                        }
+                    }
+                    Kind::Directory | Kind::Ancestor => unreachable!(),
+                }
+            }
+        }
+        m8s_secrets::check_no_extended_acl(&self.file).map_err(|_| Error::Material)
+    }
+}
+/// Retained files and exact public certificate binding, NOT a BootGate/permit.
+/// No Debug/Serialize/Clone; never exposes join/config bytes. Drop closes anchors
+/// but intentionally does not delete files: partial failure is not rollback or wipe.
+pub struct NodeMaterial {
+    launch: MeshLaunch,
+    root: PathBuf,
+    anchors: Vec<Anchor>,
+    claims: CertificateClaims,
+    certificate: NodeCertificate,
+    acl: ControlAcl,
+    config_empty: bool,
+}
+impl NodeMaterial {
+    pub fn stage(
+        root: &Path,
+        received: ReceivedBundle,
+        launch: MeshLaunch,
+        verifier: &Mp001CertificateVerifier,
+        now: i64,
+    ) -> Result<Self> {
+        Self::stage_with(root, received, launch, verifier, now)
+    }
+    // Production always supplies the concrete canonical verifier above. Unit
+    // fixtures exercise this same file engine without minting current certs.
+    fn stage_with(
+        root: &Path,
+        received: ReceivedBundle,
+        launch: MeshLaunch,
+        verifier: &impl CertificateVerifier,
+        now: i64,
+    ) -> Result<Self> {
+        let claims = &received.claims;
+        if now < 0
+            || claims.owner != launch.owner
+            || claims.node != launch.node
+            || claims.issued_at < 0
+            || claims.expires_at <= claims.issued_at
+            || now < claims.issued_at
+            || now >= claims.expires_at
+            || launch.port == 0
+            || launch.console_port == 0
+            || launch.port == launch.console_port
+            || launch.heartbeat_ttl_seconds == 0
+            || launch.heartbeat_ttl_seconds > i64::MAX as u64
+            || received.settings.heartbeat_ttl_seconds != launch.heartbeat_ttl_seconds
+            || received.settings.model != launch.model
+            || launch.model.is_empty()
+            || launch.model.len() > 256
+            || launch.model.contains('\0')
+            || launch.mesh_owner_id.len() != 64
+            || !launch
+                .mesh_owner_id
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            || received.join_token.is_empty()
+            || received.join_token.len() > 128 * 1024
+            || received.join_token.contains(&0)
+            || std::str::from_utf8(&received.join_token).is_err()
+            || received.certificate.0.is_empty()
+            || received.certificate.0.len() > 128 * 1024
+            || (launch.gguf.is_none()
+                && (launch.model_pin.is_none_or(|p| p.bytes == 0)
+                    || model::parse_model_ref(&launch.model).is_none()))
+            || received.settings.config.len() > 512 * 1024
+            || std::str::from_utf8(&received.settings.config).is_err()
+        {
+            return Err(Error::Policy);
+        }
+        verifier
+            .verify(&received.certificate, claims)
+            .map_err(|_| Error::Certificate)?;
+        let parent = root.parent().ok_or(Error::Material)?;
+        let name = root.file_name().ok_or(Error::Material)?;
+        if !root.is_absolute() || name.is_empty() || name.len() > 128 || parent.join(name) != root {
+            return Err(Error::Material);
+        }
+        let mut ancestors = Vec::new();
+        for selected in [root, launch.program.as_path(), launch.node_key.as_path()] {
+            for path in selected.ancestors().skip(1) {
+                ancestors.push(Anchor::open(path, Kind::Ancestor)?);
+            }
+        }
+        if let Some(path) = &launch.gguf {
+            for ancestor in path.ancestors().skip(1) {
+                ancestors.push(Anchor::open(ancestor, Kind::Ancestor)?);
+            }
+        }
+        let mut anchors = vec![
+            Anchor::open(parent, Kind::Directory)?,
+            Anchor::open(&launch.program, Kind::Binary)?,
+            Anchor::open(&launch.node_key, Kind::Private)?,
+        ];
+        if anchors[2].len == 0 || anchors[2].len > 4096 {
+            return Err(Error::Material);
+        }
+        anchors.push(Anchor::open(
+            launch.node_key.parent().ok_or(Error::Material)?,
+            Kind::Directory,
+        )?);
+        if let Some(path) = &launch.gguf {
+            anchors.push(Anchor::open(path, Kind::Model)?);
+        }
+        anchors.extend(ancestors);
+        check(&anchors)?;
+        fs::DirBuilder::new()
+            .mode(0o700)
+            .create(root)
+            .map_err(|_| Error::Material)?;
+        anchors.push(Anchor::open(root, Kind::Directory)?);
+        for (name, bytes) in [
+            ("join-token", received.join_token.as_slice()),
+            ("node-ownership.json", received.certificate.0.as_slice()),
+            ("runtime.toml", received.settings.config.as_slice()),
+        ] {
+            check(&anchors)?;
+            let path = root.join(name);
+            let file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+                .open(&path)
+                .map_err(|_| Error::Material)?;
+            let mut anchor = Anchor::capture(&path, file, Kind::Private)?;
+            // Check inherited ACL/type/UID/mode BEFORE the first sensitive byte.
+            check(&anchors)?;
+            anchor.file.write_all(bytes).map_err(|_| Error::Material)?;
+            anchor.len = bytes.len() as u64;
+            anchor.check()?;
+            anchors.push(anchor);
+        }
+        let result = Self {
+            launch,
+            root: root.into(),
+            anchors,
+            claims: received.claims,
+            certificate: received.certificate,
+            acl: received.acl,
+            config_empty: received.settings.config.is_empty(),
+        };
+        result.recheck_with(verifier, now)?;
+        Ok(result)
+    }
+    /// Actual received ACL metadata; caller must install it in live control policy.
+    pub fn control_acl(&self) -> &ControlAcl {
+        &self.acl
+    }
+    pub(crate) fn recheck(&self, verifier: &Mp001CertificateVerifier, now: i64) -> Result<()> {
+        self.recheck_with(verifier, now)
+    }
+    fn recheck_with(&self, verifier: &impl CertificateVerifier, now: i64) -> Result<()> {
+        if now < self.claims.issued_at || now >= self.claims.expires_at {
+            return Err(Error::Certificate);
+        }
+        verifier
+            .verify(&self.certificate, &self.claims)
+            .map_err(|_| Error::Certificate)?;
+        check(&self.anchors)
+    }
+    pub(crate) fn check_dms(&self, dms: &crate::DeadManSwitch, now: i64) -> Result<()> {
+        if dms.triggered
+            || dms.ttl != self.launch.heartbeat_ttl_seconds as i64
+            || dms.started != now
+            || dms.last_heartbeat != now
+            || dms.last_tick != now
+            || dms.max_lifetime
+                > self
+                    .claims
+                    .expires_at
+                    .checked_sub(now)
+                    .ok_or(Error::Policy)?
+        {
+            return Err(Error::Policy);
+        }
+        Ok(())
+    }
+    fn cache_root(&self) -> PathBuf {
+        self.root.join("hf-cache")
+    }
+    /// Starts verification of the resolved model against its pin, if pinned.
+    pub(crate) fn model_watch(&self) -> Option<model::ModelWatch> {
+        let pin = self.launch.model_pin?;
+        Some(match &self.launch.gguf {
+            Some(path) => model::ModelWatch::spawn(path.clone(), None, pin),
+            None => {
+                let cache = self.cache_root();
+                model::ModelWatch::spawn(
+                    model::snapshot_path(&cache, &self.launch.model)?,
+                    Some(cache),
+                    pin,
+                )
+            }
+        })
+    }
+    pub(crate) fn node(&self) -> EndpointId {
+        self.launch.node
+    }
+    pub(crate) fn command(&self) -> Result<Command> {
+        // Opaque native config is retained, NOT interpreted as launch policy.
+        // Refuse nonempty config until its native policy mapping is implemented;
+        // never silently ignore it or permit owner-key/trust overrides.
+        if !self.config_empty {
+            return Err(Error::Policy);
+        }
+
+        // No token/config/credential bytes in argv/environment. Native mesh still
+        // checks ownership against its actual node key and enforcing trust store.
+        // Require the additive native hard-fail mode. Older binaries must reject
+        // the unknown flag, never silently select their unsigned fallback.
+        // BootGate must still establish native key/endpoint matching.
+        // --owner-required demands an owner keystore and is deliberately absent.
+        let spec = ChildSpec {
+            program: self.launch.program.clone(),
+            args: vec![
+                "serve".into(),
+                if self.launch.gguf.is_some() {
+                    "--gguf"
+                } else {
+                    "--model"
+                }
+                .into(),
+                self.launch.gguf.as_ref().map_or_else(
+                    || native_model_ref(&self.launch.model).into(),
+                    |path| path.as_os_str().into(),
+                ),
+                "--join-file".into(),
+                self.root.join("join-token").into_os_string(),
+                "--node-ownership".into(),
+                self.root.join("node-ownership.json").into_os_string(),
+                "--node-ownership-required".into(),
+                "--config".into(),
+                self.root.join("runtime.toml").into_os_string(),
+                "--trust-policy".into(),
+                "allowlist".into(),
+                "--trust-owner".into(),
+                self.launch.mesh_owner_id.clone().into(),
+                "--headless".into(),
+                "--log-format".into(),
+                "json".into(),
+                "--no-default-plugins".into(),
+                "--port".into(),
+                self.launch.port.to_string().into(),
+                "--console".into(),
+                self.launch.console_port.to_string().into(),
+            ],
+        };
+        let mut command = Command::new(spec.program);
+        command
+            .args(spec.args)
+            .env_clear()
+            .env("HOME", &self.root)
+            // Fixed public image paths, never inherited environment. NVIDIA
+            // driver mounts appear after build-time ldconfig; cleared PATH and
+            // loader paths must not hide runtime GPU probes/driver libraries.
+            .env(
+                "PATH",
+                "/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            )
+            .env(
+                "LD_LIBRARY_PATH",
+                "/usr/local/nvidia/lib64:/usr/local/nvidia/lib:/usr/local/cuda/lib64",
+            )
+            .env("MESH_LLM_NODE_KEY_PATH", &self.launch.node_key)
+            .env("MESH_LLM_ANALYTICS", "0")
+            .env("DO_NOT_TRACK", "1");
+        // Native downloads use a small, explicit demo working set rather than
+        // auto-scaling to the advertised model context or allocating four lanes.
+        if self.launch.gguf.is_none() {
+            command
+                .args(["--ctx-size", "4096", "--parallel", "1", "--no-draft"])
+                // Node-dictated cache so the resolved file can be verified and,
+                // on mismatch, removed.
+                .env("HF_HUB_CACHE", self.cache_root())
+                // Fixed public transfer policy for the pinned native Hub/Xet
+                // clients: one attempt, no retry amplification of model bytes.
+                .env("MESH_HF_RETRY_MAX_ATTEMPTS", "0")
+                .env("HF_XET_CLIENT_RETRY_MAX_ATTEMPTS", "0");
+        }
+        Ok(command)
+    }
+}
+// Artifact receipts use repo@commit/file, while the native CLI consumes
+// repo@commit:file. Preserve the exact repository, commit and filename; this
+// is a syntax conversion, never quantization or model-name substitution.
+fn native_model_ref(model: &str) -> String {
+    if let Some((head, file)) = model.rsplit_once('/')
+        && let Some((repo, revision)) = head.rsplit_once('@')
+        && repo.split('/').count() == 2
+        && revision.len() == 40
+        && revision.bytes().all(|b| b.is_ascii_hexdigit())
+        && file.ends_with(".gguf")
+        && file
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+    {
+        return format!("{repo}@{revision}:{file}");
+    }
+    model.to_owned()
+}
+fn check(anchors: &[Anchor]) -> Result<()> {
+    for anchor in anchors {
+        anchor.check()?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;

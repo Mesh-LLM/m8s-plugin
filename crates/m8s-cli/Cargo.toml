@@ -1,0 +1,81 @@
+[package]
+name = "m8s-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+prototype-container = ["dep:m8s-agent", "m8s-agent/sealed-node"]
+prototype-vast = ["dep:reqwest","dep:iroh", "dep:tokio", "dep:mesh-llm-identity", "dep:zeroize", "dep:getrandom", "dep:hex", "dep:m8s-bootstrap", "dep:m8sd", "m8sd/prototype-vast", "dep:m8s-provider", "m8s-provider/vast-watchdog", "m8s-provider/vast-launch-https"]
+local-development = ["dep:m8sd", "m8sd/local-development"]
+
+[dependencies]
+ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+crossterm = { version = "0.28", default-features = false, features = ["events"] }
+socket2 = { version = "0.6", default-features = false }
+signal-hook = { version = "0.3", default-features = false }
+m8s-agent = { path = "../m8s-agent", optional = true, default-features = false }
+m8s-core.workspace = true
+m8sd = { path = "../m8sd", optional = true, default-features = false }
+m8s-config = { path = "../m8s-config" }
+toml = "=1.1.8"
+m8s-api.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+m8s-secrets = { path = "../m8s-secrets" }
+m8s-provider = { path = "../m8s-provider", optional = true, default-features = false }
+
+[[bin]]
+name = "m8s"
+path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3"
+
+nix = { version = "0.29", default-features = false, features = ["term", "signal", "fs"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+nix = { version = "0.29", default-features = false, features = ["user", "socket", "poll"] }
+
+[dependencies.iroh]
+version = "=1.3.0"
+default-features = false
+features = ["tls-aws-lc-rs"]
+optional = true
+[dependencies.tokio]
+version = "1"
+features = ["rt", "macros", "time", "process", "io-util"]
+optional = true
+[dependencies.mesh-llm-identity]
+path = "../../vendor/mesh-llm-identity"
+default-features = false
+optional = true
+[dependencies.zeroize]
+workspace = true
+optional = true
+[dependencies.getrandom]
+version = "0.4"
+optional = true
+[dependencies.hex]
+version = "0.4"
+optional = true
+[dependencies.m8s-bootstrap]
+path = "../m8s-bootstrap"
+features = ["iroh-transport", "mp001-owner-signing"]
+optional = true
+
+[[example]]
+name = "native_model_fixture"
+required-features = ["prototype-vast"]
+
+[[bin]]
+name = "m8s-top"
+path = "src/bin/m8s-top.rs"
+
+[dependencies.reqwest]
+version = "=0.13.5"
+default-features = false
+features = ["blocking", "json"]
+optional = true

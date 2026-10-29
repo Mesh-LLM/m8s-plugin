@@ -1,0 +1,18 @@
+/target/
+/bundles/
+*.db
+*.db-shm
+*.db-wal
+
+/.cargo-home/
+
+# Operator credentials stay outside committed source.
+.env
+.env.*
+!.env.example
+
+# Python bytecode.
+__pycache__/
+*.pyc
+
+/plugin/target/

@@ -1,0 +1,37 @@
+[package]
+name = "m8sd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+local-development = ["m8s-provider/local"]
+secure-bootstrap = ["m8s-bootstrap/iroh-transport", "m8s-bootstrap/mp001-owner-signing", "dep:iroh", "dep:tokio"]
+prototype-vast = ["secure-bootstrap", "m8s-provider/vast-watchdog", "m8s-provider/vast-launch-https"]
+
+[dependencies]
+m8s-provider = { path = "../m8s-provider", default-features = false }
+m8s-config = { path = "../m8s-config" }
+m8s-core.workspace = true
+m8s-api.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+fs2.workspace = true
+sha2.workspace = true
+
+m8s-bootstrap = { path = "../m8s-bootstrap" }
+zeroize.workspace = true
+iroh = { version = "=1.3.0", default-features = false, features = ["tls-aws-lc-rs"], optional = true }
+tokio = { version = "1", features = ["rt", "macros", "time"], optional = true }
+
+libc = "0.2"
+nix = { version = "0.29", default-features = false, features = ["poll"] }
+
+[[example]]
+name = "local-lifecycle-demo"
+path = "examples/local_lifecycle_demo.rs"
+required-features = ["local-development"]
+test = true

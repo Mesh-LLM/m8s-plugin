@@ -1,0 +1,19 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+exclude = ["vendor/mesh-llm-identity", "qualification/bootstrap-mp001", "plugin"]
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+thiserror = "2"
+rusqlite = { version = "0.38", features = ["bundled"] }
+m8s-core = { path = "crates/m8s-core" }
+m8s-api = { path = "crates/m8s-api" }
+m8sd = { path = "crates/m8sd" }
+fs2 = "0.4"
+sha2 = "0.10"
+zeroize = "1"
