@@ -4,10 +4,14 @@ Paths below are from the repository root. This procedure performs a paid rental
 only when the user requests it and the account/budget boundaries are established.
 The successful historical run is evidence, not a reusable launch plan.
 
+For stock-Mesh token-only v0, also follow `docs/V0_TOKEN_JOIN.md`. Historical
+private-fork images below do not qualify stock main. Keep certificate claims
+exclusive to the certified path.
+
 ## 1. Reuse the tested artifacts
 
 Read `deploy/container/native-source.json` and
-`deploy/container/listener-agent-evidence.json` for exact pins. The Linux AMD64
+the privately retained listener-agent receipt for exact pins. The Linux AMD64
 runtime is already published with its model and actual mesh node. Download the
 Mac ARM64 CLI and native client from the private release when appropriate:
 
@@ -84,10 +88,9 @@ plus cleanup, and at least 240 seconds reserved for cleanup. These implementatio
 ceilings do not grant spending authority. Budget validation may impose stricter
 limits. Choose a cap within the remaining cumulative authorization.
 
-The CLI currently uses a fixed bounded demonstration prompt and one completion;
-it is not a persistent interactive chat server. Do not extend rental lifetime
-by disabling cleanup to make a playground. Implement an explicitly bounded
-interactive mode separately if requested.
+The CLI performs a bounded canary. With an explicitly configured control
+directory, the desktop session may remain active until removal or the existing
+deadline. Do not extend rental lifetime by disabling cleanup.
 
 ## 4. Run once and retain evidence
 

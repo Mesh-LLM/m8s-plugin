@@ -10,6 +10,8 @@ mod demo_model;
 mod launch;
 #[cfg(all(unix, feature = "prototype-vast"))]
 mod owner;
+#[cfg(feature = "prototype-vast")]
+mod token_join;
 // Real HTTP request leg for explicitly local qualification, NOT mesh admission.
 use std::{io::Write, path::PathBuf};
 const HELP: &str = "m8s prototype request --local-qualification --endpoint http://127.0.0.1:PORT --model ID --prompt-file ABS --max-tokens 1..128 --timeout-ms 1..60000 [--wait-model-ms 1..TIMEOUT-1] [--json]\nOptional wait polls /v1/models for the exact model within the total request deadline. This is model discovery, not Ready.\nOne non-streaming /v1/chat/completions request, no retries/download/launch. Explicit bounded UTF-8 prompt file<=8192 bytes; model ASCII<=128. Loopback HTTP only, no DNS/proxy/redirect/auth header. Does NOT implement or downgrade bootstrap/control TLS. A completion is not verified identity, Ready, owner routing or paid qualification. Timeout is outcome-unknown; computation may continue at server.\n";

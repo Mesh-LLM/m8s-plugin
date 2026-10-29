@@ -17,7 +17,7 @@ and synthetic fixtures.
 - Keep secret values out of Debug, Serialize, argv, logs, fixtures and the repository.
 - Launch intent precedes effects; uncertainty is not absence; stopped is not destroyed.
 - Delete instance rows only after explicit provider-confirmed absence. Scope orphan cleanup by exact owner.
-- Do not advertise Ready without certificate verification, served model and owner-routed canary.
+- Certified mode requires certificate verification, served model and owner-routed canary. Explicit token-only v0 may report only token-mode inference verification after its separate gates; never imply owner certification.
 - Do not weaken iroh bootstrap/control to plaintext transport. Unimplemented security paths fail closed.
 - Run scripts/check (fmt, tests, clippy); max two compiler jobs. Coordinate heavy builds.
 - Only integration owner edits root Cargo.toml/Cargo.lock. Workers do not delegate.

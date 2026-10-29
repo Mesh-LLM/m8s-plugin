@@ -31,7 +31,7 @@ Existing Mac binaries are convenience artifacts, not portable or signed releases
 
 ## Evidence and implementation
 
-- [Published image provenance](../../deploy/container/listener-agent-evidence.json)
-- [Offline actual-native inference](../../deploy/container/native-model-inference-evidence.json)
-- [Live owner-routed inference](../../deploy/container/demo-proof.json)
+- [Published image provenance](../HISTORICAL_EVIDENCE.md)
+- [Offline actual-native inference](../HISTORICAL_EVIDENCE.md)
+- [Live owner-routed inference](../HISTORICAL_EVIDENCE.md)
 - [Container build and qualification](../../deploy/container/README.md)

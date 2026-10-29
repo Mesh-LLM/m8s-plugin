@@ -930,7 +930,7 @@ published image, successful container startup, or source tests as inference proo
 
 ### Live acceptance (2026-10-23)
 
-The full `prototype launch` command passed on Vast instance **57330173**,
+The full `prototype launch` command passed on Vast historical instance,
 including canonical certificate delivery, owner-routed Qwen inference, exact
 resource destruction, and independent provider absence confirmation. See
 `deploy/container/demo-proof.json`. Earlier failed attempts remain recorded.

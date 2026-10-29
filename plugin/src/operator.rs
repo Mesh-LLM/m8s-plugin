@@ -1,0 +1,483 @@
+//! Shared v0 operation boundary used by Mesh MCP and the desktop's local adapter.
+//! Requests cannot select executables, credential paths, tokens, or launch policy.
+use anyhow::{Context, Result, ensure};
+use serde::Deserialize;
+use serde_json::{Value, json};
+use std::{
+    fs,
+    io::{Read, Write},
+    os::unix::fs::{MetadataExt, OpenOptionsExt},
+    path::{Path, PathBuf},
+    process::Stdio,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+#[derive(Deserialize, schemars::JsonSchema)]
+#[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Request {
+    Offers {},
+    Quote { offer_id: u64, machine_id: u64 },
+    Launch { quote_id: String },
+    Status {},
+    Remove {},
+}
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+fn read(path: &Path) -> Result<Value> {
+    ensure!(
+        path.is_absolute() && path.canonicalize()? == path,
+        "Invalid private input"
+    );
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)?;
+    let m = file.metadata()?;
+    ensure!(
+        m.is_file()
+            && m.uid() == unsafe { libc::geteuid() }
+            && m.mode() & 0o077 == 0
+            && m.len() <= 32768,
+        "Invalid private input"
+    );
+    let mut bytes = Vec::new();
+    file.take(32769).read_to_end(&mut bytes)?;
+    ensure!(bytes.len() <= 32768, "Oversized input");
+    Ok(serde_json::from_slice(&bytes)?)
+}
+fn write_new(path: &Path, value: &Value) -> Result<()> {
+    let mut f = fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)?;
+    f.write_all(&serde_json::to_vec(value)?)?;
+    f.sync_all()?;
+    fs::File::open(path.parent().context("Missing parent")?)?.sync_all()?;
+    Ok(())
+}
+struct Config {
+    cli: PathBuf,
+    plan: Value,
+    root: PathBuf,
+}
+impl Config {
+    fn load() -> Result<Self> {
+        let cli = PathBuf::from(std::env::var_os("M8S_CLI").context("Configure M8S_CLI")?);
+        let m = fs::symlink_metadata(&cli)?;
+        ensure!(
+            cli.is_absolute()
+                && cli.canonicalize()? == cli
+                && m.is_file()
+                && m.uid() == unsafe { libc::geteuid() }
+                && m.mode() & 0o7022 == 0
+                && m.mode() & 0o111 != 0,
+            "Invalid controller"
+        );
+        let path = PathBuf::from(std::env::var_os("M8S_V0_PLAN").context("Configure M8S_V0_PLAN")?);
+        let plan = read(&path)?;
+        ensure!(
+            plan["schema"] == "m8s.vast-demo/v1"
+                && plan["model"] == "qwen3.8-27b"
+                && plan["token_target"].is_string()
+                && plan.get("attachment").is_none(),
+            "Expected explicit token-only plan"
+        );
+        let root = PathBuf::from(
+            plan["control_directory"]
+                .as_str()
+                .context("Missing control directory")?,
+        );
+        let m = fs::symlink_metadata(&root)?;
+        ensure!(
+            root.is_absolute()
+                && root.canonicalize()? == root
+                && m.is_dir()
+                && m.uid() == unsafe { libc::geteuid() }
+                && m.mode() & 0o777 == 0o700,
+            "Invalid control directory"
+        );
+        Ok(Self { cli, plan, root })
+    }
+    fn target(&self) -> Result<Value> {
+        read(Path::new(
+            self.plan["token_target"]
+                .as_str()
+                .context("Missing target")?,
+        ))
+    }
+    fn cap(&self) -> Result<u64> {
+        let p = &self.plan["policy"];
+        let cap = p["trial_all_in"]
+            .as_u64()
+            .and_then(|v| v.checked_sub(p["baseline"]["prior_lifetime_spent"].as_u64()?))
+            .context("Invalid allowance")?;
+        ensure!(
+            (1..=6_000_000).contains(&cap),
+            "Allowance exceeds v0 ceiling"
+        );
+        Ok(cap)
+    }
+    async fn cli(&self, args: Vec<String>) -> Result<Value> {
+        let result = tokio::time::timeout(
+            Duration::from_secs(30),
+            tokio::process::Command::new(&self.cli)
+                .args(args)
+                .stdin(Stdio::null())
+                .stderr(Stdio::null())
+                .stdout(Stdio::piped())
+                .kill_on_drop(true)
+                .output(),
+        )
+        .await??;
+        ensure!(
+            result.status.success() && result.stdout.len() <= 131072,
+            "Controller operation refused"
+        );
+        Ok(serde_json::from_slice(&result.stdout)?)
+    }
+    fn command_args(&self, operation: &str) -> Result<Vec<String>> {
+        Ok(vec![
+            "prototype".into(),
+            operation.into(),
+            "--credential-file".into(),
+            self.plan["credential_file"]
+                .as_str()
+                .context("Missing credential selection")?
+                .into(),
+        ])
+    }
+}
+async fn verify_target(target: &Value) -> Result<Value> {
+    let port = target["console_port"]
+        .as_u64()
+        .filter(|p| *p > 0 && *p <= 65535)
+        .context("Invalid local port")?;
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(3))
+        .build()?;
+    let mut response = client
+        .get(format!("http://127.0.0.1:{port}/api/status"))
+        .send()
+        .await?;
+    ensure!(response.status().is_success(), "Target unavailable");
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await? {
+        ensure!(bytes.len() + chunk.len() <= 65536, "Oversized status");
+        bytes.extend_from_slice(&chunk);
+    }
+    let status: Value = serde_json::from_slice(&bytes)?;
+    ensure!(
+        status["node_id"] == target["node_id"] && status["mesh_id"] == target["mesh_id"],
+        "Selected mesh changed"
+    );
+    Ok(status)
+}
+fn worker_present(status: &Value, ready: &Value) -> bool {
+    status["is_host"] == false
+        && status["peers"].as_array().is_some_and(|peers| {
+            peers.len() == 1
+                && ready["node_id"].as_str().is_some_and(|id| {
+                    peers[0]["id"].as_str().or(peers[0]["node_id"].as_str()) == Some(id)
+                })
+        })
+}
+pub async fn execute(request: Request) -> Result<Value> {
+    let c = Config::load()?;
+    execute_config(&c, request).await
+}
+async fn execute_config(c: &Config, request: Request) -> Result<Value> {
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(c.root.join("operator.lock"))?;
+    fs2::FileExt::try_lock_exclusive(&lock).context("Another operation is active")?;
+    let intent = c.root.join("operator-intent.json");
+    let result = match request {
+        Request::Offers {} => {
+            let mut args = c.command_args("vast-offers")?;
+            args.extend(["--disk-gb".into(), "80".into()]);
+            c.cli(args).await?
+        }
+        Request::Quote {
+            offer_id,
+            machine_id,
+        } => {
+            ensure!(
+                !intent.try_exists()? && offer_id > 0 && machine_id > 0,
+                "Attempt already consumed or invalid offer"
+            );
+            let target = c.target()?;
+            verify_target(&target).await?;
+            let mut args = c.command_args("vast-quote")?;
+            args.extend([
+                "--account".into(),
+                c.plan["expected_account_id"]
+                    .as_u64()
+                    .context("Missing account")?
+                    .to_string(),
+                "--disk-gb".into(),
+                "80".into(),
+                "--offer".into(),
+                offer_id.to_string(),
+                "--machine".into(),
+                machine_id.to_string(),
+            ]);
+            let prices = c.cli(args).await?;
+            ensure!(prices["offer_id"] == offer_id, "Offer changed");
+            let mut nonce = [0u8; 32];
+            getrandom::fill(&mut nonce).map_err(|_| anyhow::anyhow!("Randomness unavailable"))?;
+            let id = nonce.iter().map(|b| format!("{b:02x}")).collect::<String>();
+            let mut plan = c.plan.clone();
+            plan["offer_id"] = json!(offer_id);
+            plan["offer_machine_id"] = json!(machine_id);
+            let quote = json!({"quote_id":id,"expires_at":now()+30,"plan":plan,"target":target,"prices":prices});
+            write_new(&c.root.join(format!("quote-{id}.json")), &quote)?;
+            json!({"quote_id":id,"expires_at":quote["expires_at"],"model":"Qwen 3.8 27B · token-only v0","target":{"node_id":target["node_id"],"mesh_id":target["mesh_id"]},"cap_micro_usd":c.cap()?,"prices":prices,"admission":"token-only-provider-trusted","certificate_verified":false})
+        }
+        Request::Launch { quote_id } => {
+            ensure!(
+                !intent.try_exists()?
+                    && quote_id.len() == 64
+                    && quote_id.bytes().all(|b| b.is_ascii_hexdigit()),
+                "Attempt consumed or invalid quote"
+            );
+            let quote = read(&c.root.join(format!("quote-{quote_id}.json")))?;
+            ensure!(
+                quote["expires_at"].as_u64().is_some_and(|t| t >= now())
+                    && quote["target"] == c.target()?,
+                "Expired quote or changed target"
+            );
+            verify_target(&quote["target"]).await?;
+            let plan = quote["plan"].clone();
+            let mut expected = c.plan.clone();
+            expected["offer_id"] = plan["offer_id"].clone();
+            expected["offer_machine_id"] = plan["offer_machine_id"].clone();
+            ensure!(plan == expected, "Changed policy or configuration");
+            c.cap()?;
+            let plan_path = c.root.join("operator-plan.json");
+            write_new(&plan_path, &plan)?;
+            write_new(
+                &intent,
+                &json!({"schema":"m8s.operation/v0","quote_id":quote_id,"created_at":now(),"expires_at":now()+1800,"offer_id":plan["offer_id"],"target_node":quote["target"]["node_id"],"target_mesh":quote["target"]["mesh_id"]}),
+            )?;
+            let log = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(c.root.join("operator.log"))?;
+            let _child = std::process::Command::new(&c.cli)
+                .args(["prototype", "launch", "--plan"])
+                .arg(plan_path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(log)
+                .spawn()?;
+            json!({"accepted":true,"admission":"token-only-provider-trusted","certificate_verified":false})
+        }
+        Request::Remove {} => {
+            ensure!(intent.try_exists()?, "No attempt");
+            let stop = c.root.join("down-requested");
+            if !stop.try_exists()? {
+                write_new(&stop, &json!({"requested":true}))?;
+            }
+            json!({"removal_requested":true,"removed":false})
+        }
+        Request::Status {} => {
+            let attempt = PathBuf::from(
+                c.plan["directory"]
+                    .as_str()
+                    .context("Missing attempt directory")?,
+            );
+            let cleanup = read(&attempt.join("cleanup-evidence.json")).ok();
+            let node = read(&attempt.join("desktop-node.json")).ok();
+            let removed = cleanup.as_ref().zip(node.as_ref()).is_some_and(|(r, n)| {
+                r["schema"] == "m8s.vast-removal/v1"
+                    && r["provider_confirmed_absent"] == true
+                    && r["image"] == c.plan["image"]
+                    && r["creator_account_id"] == c.plan["expected_account_id"]
+                    && r["instance_id"]
+                        .as_u64()
+                        .is_some_and(|id| id > 0 && n["instance_id"] == id)
+            });
+            let evidence = read(&attempt.join("demo-evidence.json")).ok();
+            let ready = read(&attempt.join("token-ready.json")).ok();
+            let target = c.target()?;
+            let live = verify_target(&target).await.ok();
+            let active_ready = !removed
+                && !c.root.join("down-requested").exists()
+                && ready.as_ref().zip(node.as_ref()).is_some_and(|(r, n)| {
+                    r["schema"] == "m8s.token-ready/v0"
+                        && r["certificate_verified"] == false
+                        && r["instance_id"] == n["instance_id"]
+                        && r["mesh_id"] == target["mesh_id"]
+                        && live
+                            .as_ref()
+                            .is_some_and(|status| worker_present(status, r))
+                });
+
+            json!({"ready":active_ready,"offer_id":read(&intent).ok().map(|v|v["offer_id"].clone()),"expires_at":read(&intent).ok().map(|v|v["expires_at"].clone()),"removal_requested":c.root.join("down-requested").exists(),"node_id":ready.as_ref().and_then(|r|r["node_id"].as_str()),"target":{"node_id":target["node_id"],"mesh_id":target["mesh_id"]},"attempt_consumed":intent.try_exists()?,"provider_confirmed_removed":removed,"instance_id":node.as_ref().and_then(|v|v["instance_id"].as_u64()),"certificate_verified":false,"admission":"token-only-provider-trusted","inference_verified":removed&&evidence.as_ref().is_some_and(|e|e["schema"]=="m8s.vast-demo-evidence/v1"&&e["certificate_verified"]==false&&e["admission"]=="token-only-provider-trusted"&&e["owner_routed_inference"]==true&&e["provider_confirmed_absent"]==true&&e["image"]==c.plan["image"]&&node.as_ref().is_some_and(|n|e["instance_id"]==n["instance_id"]))})
+        }
+    };
+    Ok(json!({"schema":"m8s.operator/v0","result":result}))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn readiness_requires_the_live_sole_worker() {
+        let ready = json!({"node_id":"worker"});
+        assert!(worker_present(
+            &json!({"is_host":false,"peers":[{"id":"worker"}]}),
+            &ready
+        ));
+        for status in [
+            json!({"is_host":false,"peers":[]}),
+            json!({"is_host":false,"peers":[{"id":"other"}]}),
+            json!({"is_host":true,"peers":[{"id":"worker"}]}),
+            json!({"is_host":false,"peers":[{"id":"worker"},{"id":"other"}]}),
+        ] {
+            assert!(!worker_present(&status, &ready));
+        }
+    }
+    #[test]
+    fn requests_cannot_override_private_configuration() {
+        for v in [
+            json!({"operation":"launch","quote_id":"x","plan":"/tmp/other"}),
+            json!({"operation":"offers","api_key":"secret"}),
+            json!({"operation":"shell","command":"anything"}),
+        ] {
+            assert!(serde_json::from_value::<Request>(v).is_err());
+        }
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    use std::{
+        net::TcpListener,
+        os::unix::fs::PermissionsExt,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+    };
+    #[tokio::test]
+    async fn quote_then_one_launch_retains_intent_and_requires_exact_cleanup() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path().canonicalize().unwrap();
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        listener.set_nonblocking(true).unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = stop.clone();
+        let server = std::thread::spawn(move || {
+            while !stopped.load(Ordering::Relaxed) {
+                if let Ok((mut socket, _)) = listener.accept() {
+                    socket.set_nonblocking(false).unwrap();
+                    socket
+                        .set_read_timeout(Some(Duration::from_secs(1)))
+                        .unwrap();
+                    let mut request = Vec::new();
+                    while request.len() < 8192 && !request.ends_with(b"\r\n\r\n") {
+                        let mut byte = [0];
+                        if socket.read(&mut byte).unwrap_or(0) != 1 {
+                            break;
+                        }
+                        request.push(byte[0]);
+                    }
+                    let body = r#"{"node_id":"node","mesh_id":"mesh"}"#;
+                    let _ = write!(
+                        socket,
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                } else {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            }
+        });
+        let target = root.join("target.json");
+        write_new(
+            &target,
+            &json!({"node_id":"node","mesh_id":"mesh","console_port":port}),
+        )
+        .unwrap();
+        let cli = root.join("controller");
+        fs::write(&cli,format!("#!/bin/sh\nif [ \"$2\" = vast-quote ]; then printf '%s' '{{\"offer_id\":7}}'; exit 0; fi\nif [ \"$2\" = launch ]; then test -f '{}/operator-intent.json' || exit 1; printf 'invoked' > '{}/invoked'; exit 0; fi\nexit 1\n",root.display(),root.display())).unwrap();
+        fs::set_permissions(&cli, fs::Permissions::from_mode(0o700)).unwrap();
+        let attempt = root.join("attempt");
+        fs::create_dir(&attempt).unwrap();
+        let c = Config {
+            cli,
+            root: root.clone(),
+            plan: json!({"control_directory":root,"directory":attempt,"token_target":target,"credential_file":"/synthetic/key.env","expected_account_id":42,"image":"test-image","policy":{"trial_all_in":6000010,"baseline":{"prior_lifetime_spent":10}}}),
+        };
+        let quote = execute_config(
+            &c,
+            Request::Quote {
+                offer_id: 7,
+                machine_id: 9,
+            },
+        )
+        .await
+        .unwrap();
+        let id = quote["result"]["quote_id"].as_str().unwrap().to_owned();
+        assert!(
+            execute_config(
+                &c,
+                Request::Launch {
+                    quote_id: id.clone()
+                }
+            )
+            .await
+            .unwrap()["result"]["accepted"]
+                == true
+        );
+        assert!(
+            execute_config(&c, Request::Launch { quote_id: id })
+                .await
+                .is_err()
+        );
+        for _ in 0..100 {
+            if root.join("invoked").exists() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(root.join("invoked").exists());
+        execute_config(&c, Request::Remove {}).await.unwrap();
+        assert!(root.join("down-requested").exists());
+        assert!(root.join("operator-intent.json").exists());
+        write_new(
+            &attempt.join("desktop-node.json"),
+            &json!({"instance_id":123}),
+        )
+        .unwrap();
+        write_new(&attempt.join("cleanup-evidence.json"),&json!({"schema":"m8s.vast-removal/v1","provider_confirmed_absent":true,"instance_id":999,"image":"test-image","creator_account_id":42})).unwrap();
+        let status = execute_config(&c, Request::Status {}).await.unwrap();
+        assert_eq!(status["result"]["provider_confirmed_removed"], false);
+        let path = attempt.join("cleanup-evidence.json");
+        fs::remove_file(&path).unwrap();
+        write_new(&path,&json!({"schema":"m8s.vast-removal/v1","provider_confirmed_absent":true,"instance_id":123,"image":"test-image","creator_account_id":42})).unwrap();
+        let status = execute_config(&c, Request::Status {}).await.unwrap();
+        assert_eq!(status["result"]["provider_confirmed_removed"], true);
+        assert_eq!(status["result"]["certificate_verified"], false);
+        assert!(!status.to_string().contains("/synthetic"));
+        stop.store(true, Ordering::Relaxed);
+        server.join().unwrap();
+    }
+}

@@ -48,6 +48,7 @@ pub struct ProvisionPacket {
     frame: SecretValue,
     instance: NonZeroU64,
     image: String,
+    command: &'static str,
 }
 impl ProvisionPacket {
     pub fn new(config: &Value, nonce: SecretValue, node_key: SecretValue) -> Result<Self> {
@@ -115,6 +116,57 @@ impl ProvisionPacket {
             frame: SecretValue::new(frame),
             instance,
             image: image.into(),
+            command: "provision-v1",
+        })
+    }
+    /// Explicit token-only admission over the same pinned SSH transport.
+    /// This packet is never accepted by the certified receiver.
+    pub fn token_join(config: &Value, token: SecretValue) -> Result<Self> {
+        let fields = [
+            "schema",
+            "instance_id",
+            "image_sha256",
+            "model",
+            "mesh_id",
+            "lifetime_seconds",
+        ];
+        let object = config.as_object().ok_or(Error::Invalid)?;
+        let instance = config["instance_id"]
+            .as_u64()
+            .and_then(NonZeroU64::new)
+            .ok_or(Error::Invalid)?;
+        let image = config["image_sha256"].as_str().ok_or(Error::Invalid)?;
+        let mesh = config["mesh_id"].as_str().ok_or(Error::Invalid)?;
+        if object.len() != fields.len()
+            || fields.iter().any(|f| !object.contains_key(*f))
+            || config["schema"] != "m8s.token-join/v0"
+            || config["model"] != QWEN38_MODEL_REF
+            || image.len() != 64
+            || !image.bytes().all(|b| b.is_ascii_hexdigit())
+            || !matches!(mesh.len(), 16 | 32 | 64)
+            || !mesh.bytes().all(|b| b.is_ascii_hexdigit())
+            || !config["lifetime_seconds"]
+                .as_u64()
+                .is_some_and(|n| (1..=1500).contains(&n))
+            || token.expose().is_empty()
+            || token.expose().len() > 16384
+            || !token.expose().iter().all(|b| (33..=126).contains(b))
+        {
+            return Err(Error::Invalid);
+        }
+        let public = serde_json::to_vec(config).map_err(|_| Error::Invalid)?;
+        let magic = b"M8S-TOKEN-JOIN-V0\n";
+        let mut frame = Vec::with_capacity(magic.len() + 8 + public.len() + token.expose().len());
+        frame.extend_from_slice(magic);
+        frame.extend_from_slice(&(public.len() as u32).to_be_bytes());
+        frame.extend_from_slice(&public);
+        frame.extend_from_slice(&(token.expose().len() as u32).to_be_bytes());
+        frame.extend_from_slice(token.expose());
+        Ok(Self {
+            frame: SecretValue::new(frame),
+            instance,
+            image: image.into(),
+            command: "join-v0",
         })
     }
 }
@@ -173,6 +225,10 @@ impl ProvisioningSession {
         file.sync_all().map_err(|_| Error::Unavailable)?;
         directory.sync_all().map_err(|_| Error::Unavailable)?;
         let mut command = ssh_command(root, identity_file, &known, address);
+        // Only these internally constructed packet types can select a remote command.
+        if packet.command == "join-v0" {
+            command = token_ssh_command(root, identity_file, &known, address);
+        }
         let mut child = command.spawn().map_err(|_| Error::Unavailable)?;
         if let Some(mut stderr) = child.stderr.take() {
             tokio::spawn(async move {
@@ -231,6 +287,27 @@ impl ProvisioningSession {
             .ok_or("prototype-provision-output-unavailable")?;
         wait_for_stages(output).await
     }
+    /// Public node identity observed inside pinned SSH; not an owner certificate.
+    pub async fn token_identity(&mut self, timeout: Duration) -> Result<Value> {
+        let mut output = self.child.stdout.take().ok_or(Error::Unavailable)?;
+        let bytes = tokio::time::timeout(timeout, async {
+            let mut bytes = Vec::new();
+            loop {
+                let byte = output.read_u8().await.map_err(|_| Error::Unavailable)?;
+                if byte == b'\n' {
+                    break;
+                }
+                if bytes.len() >= 512 {
+                    return Err(Error::Invalid);
+                }
+                bytes.push(byte);
+            }
+            Ok(bytes)
+        })
+        .await
+        .map_err(|_| Error::Unavailable)??;
+        serde_json::from_slice(&bytes).map_err(|_| Error::Invalid)
+    }
     pub async fn exited(&mut self) -> Result<()> {
         self.child
             .wait()
@@ -264,6 +341,23 @@ async fn wait_for_stages(
 }
 
 fn ssh_command(
+    root: &Path,
+    identity: &Path,
+    known: &Path,
+    address: std::net::SocketAddr,
+) -> Command {
+    command_for("provision-v1", root, identity, known, address)
+}
+fn token_ssh_command(
+    root: &Path,
+    identity: &Path,
+    known: &Path,
+    address: std::net::SocketAddr,
+) -> Command {
+    command_for("join-v0", root, identity, known, address)
+}
+fn command_for(
+    remote_command: &str,
     root: &Path,
     identity: &Path,
     known: &Path,
@@ -316,7 +410,7 @@ fn ssh_command(
         .arg("-p")
         .arg(address.port().to_string())
         .arg(format!("m8s@{}", address.ip()))
-        .arg("provision-v1")
+        .arg(remote_command)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -410,5 +504,35 @@ mod readiness_tests {
                 prefix.extend_from_slice(record);
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod token_packet_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn token_mode_is_separate_and_bounded() {
+        let config = json!({"schema":"m8s.token-join/v0","instance_id":123,"image_sha256":"a".repeat(64),"mesh_id":"b".repeat(16),"model":QWEN38_MODEL_REF,"lifetime_seconds":60});
+        let packet =
+            ProvisionPacket::token_join(&config, SecretValue::new(b"synthetic-token".to_vec()))
+                .unwrap();
+        assert_eq!(packet.command, "join-v0");
+        assert!(packet.frame.expose().starts_with(b"M8S-TOKEN-JOIN-V0\n"));
+        for token in [b"".as_slice(), b"new\nline", b"space token"] {
+            assert!(
+                ProvisionPacket::token_join(&config, SecretValue::new(token.to_vec())).is_err()
+            );
+        }
+        let mut invalid = config.clone();
+        invalid["lifetime_seconds"] = json!(1501);
+        assert!(
+            ProvisionPacket::token_join(&invalid, SecretValue::new(b"synthetic".to_vec())).is_err()
+        );
+        invalid = config;
+        invalid["disable_auth"] = json!(true);
+        assert!(
+            ProvisionPacket::token_join(&invalid, SecretValue::new(b"synthetic".to_vec())).is_err()
+        );
     }
 }

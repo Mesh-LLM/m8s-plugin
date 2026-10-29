@@ -69,7 +69,8 @@ def sync_directory(path):
         os.close(fd)
 
 
-def serve():
+def serve(receiver="vast_provision.py"):
+    require(receiver in ("vast_provision.py", "token_provision.py"))
     require(os.geteuid() == 0)
     key = public_key(os.environ.get('M8S_PROVISION_SSH_KEY', ''))
     instance = os.environ.get('CONTAINER_ID', '')
@@ -85,7 +86,7 @@ def serve():
     write_new(ROOT / 'instance-api-key', credential)
     del credential
     write_new(SSHD / 'authorized_keys',
-              ('restrict,command="/usr/bin/python3 /usr/local/lib/m8s/vast_provision.py receive" '
+              ('restrict,command="/usr/bin/python3 /usr/local/lib/m8s/' + receiver + ' receive" '
                + key + '\n').encode('ascii'), 0, 0)
     # sshd reads authorized_keys under the target user's identity. This file is
     # public and root-owned; host private keys in the same directory stay 0600.
@@ -123,6 +124,7 @@ LoginGraceTime 20
 LogLevel ERROR
 ForceCommand /usr/bin/python3 /usr/local/lib/m8s/vast_provision.py receive
 '''
+    config = config.replace('vast_provision.py receive', receiver + ' receive')
     write_new(SSHD / 'sshd_config', config.encode('ascii'), 0, 0)
     sync_directory(ROOT)
     sync_directory(SSHD)

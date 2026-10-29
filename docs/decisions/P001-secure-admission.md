@@ -32,7 +32,15 @@ Production relay policy, NAT diversity, and recovery need separate qualification
 
 ## Evidence and implementation
 
-- [Live receipt](../../deploy/container/demo-proof.json)
+- [Live receipt](../HISTORICAL_EVIDENCE.md)
 - [Native source revisions](../../deploy/container/native-source.json)
 - [Bootstrap contract](../../crates/m8s-bootstrap/README.md)
 - [Provisioning protocol](../../crates/m8s-provider/src/vast/provision_protocol.rs)
+
+## Stock-Mesh v0 exception
+
+[P007](P007-stock-mesh-token-v0.md) records the explicitly selected, weaker
+join-token admission path. It does not satisfy this ADR's owner certificate
+requirement. Certificate issuance is tracked in
+[issue #1](https://github.com/Mesh-LLM/m8s-plugin/issues/1); token-mode results must
+never claim certified admission.

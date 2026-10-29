@@ -46,6 +46,8 @@ struct Plan {
     mesh: PathBuf,
     #[serde(default)]
     attachment: Option<PathBuf>,
+    #[serde(default)]
+    token_target: Option<PathBuf>,
     credential_file: PathBuf,
     image: String,
     offer_id: Option<NonZeroU64>,
@@ -65,7 +67,9 @@ fn load(path: &Path) -> Result<Plan> {
         return Err(ERROR);
     }
     let p: Plan = serde_json::from_slice(&bytes).map_err(|_| ERROR)?;
-    if !p.model.accepts_disk(p.disk_gb)
+    if (p.token_target.is_some()
+        && (p.attachment.is_some() || !matches!(p.model, DemoModel::Qwen38)))
+        || !p.model.accepts_disk(p.disk_gb)
         || p.schema != "m8s.vast-demo/v1"
         || p.owner != p.policy.owner
         || p.owner != p.request.owner
@@ -211,7 +215,9 @@ pub(super) fn run(args: &[String]) -> Result<()> {
         b.local_addr().map_err(|_| ERROR)?.port(),
     );
     drop((a, b));
-    let mut client = if let Some(path) = &p.attachment {
+    let mut client = if let Some(path) = &p.token_target {
+        Client::Token(super::token_join::TokenClient::load(path)?)
+    } else if let Some(path) = &p.attachment {
         Client::Attached(Attached::load(path)?)
     } else {
         let _enter = runtime.enter();
@@ -258,7 +264,11 @@ fn run_with_client(
             &serde_json::to_vec(&client.desktop_attachment()).map_err(|_| ERROR)?,
         )?;
     }
-    eprintln!("prototype stage: certified-owner-client-ready");
+    if matches!(client, Client::Token(_)) {
+        eprintln!("prototype stage: token-owner-target-verified");
+    } else {
+        eprintln!("prototype stage: certified-owner-client-ready");
+    }
     let ssh_public = ssh_key(&p.directory)?;
     eprintln!("prototype stage: provisioning-key-created");
     let key = credential(&p.credential_file)?;
@@ -385,6 +395,17 @@ fn run_with_client(
     // Once positively bound, every subsequent outcome passes through independent
     // provider-confirmed cleanup before reporting success or inference content.
     let work = (|| {
+        if matches!(client, Client::Token(_)) {
+            // Preserve exact cleanup attribution even if SSH/admission fails.
+            private_file(
+                &p.directory.join("desktop-node.json"),
+                &serde_json::to_vec(&serde_json::json!({
+                    "instance_id":access.instance_id().get(), "image":p.image,
+                    "model":p.model.request_model(), "certificate_verified":false
+                }))
+                .map_err(|_| ERROR)?,
+            )?;
+        }
         executor
             .bind_observed(&store, &intent, &access)
             .map_err(|_| ERROR)?;
@@ -404,6 +425,19 @@ fn run_with_client(
         let fresh_access = cleanup.observe_owned().map_err(|_| ERROR)?.ok_or(ERROR)?;
         if fresh_access.instance_id() != access.instance_id() {
             return Err(ERROR);
+        }
+        if let Client::Token(token) = client {
+            return runtime.block_on(super::token_join::serve(
+                token,
+                &p.directory,
+                p.control_directory.as_deref(),
+                &fresh_access,
+                &host_key,
+                &p.image,
+                p.model,
+                invite,
+                serving_at,
+            ));
         }
         runtime.block_on(bootstrap(
             p,
@@ -440,7 +474,7 @@ fn run_with_client(
         .map_err(|_| "prototype-removal-finalization-refused")?;
     let completion = work?;
     Ok(
-        serde_json::json!({"schema":"m8s.vast-demo-evidence/v1","instance_id":absent.instance_id().get(),"image":p.image,"model":p.model.served(),"api_model":p.model.request_model(),"artifact_name":p.model.label(),"certificate_verified":true,"owner_routed_inference":true,"provider_confirmed_absent":true,"reserved_micro_usd":reserved.reserved_all_in,"final_billing":"unknown-liability-retained","resource_row_removed":true,"completion":completion}),
+        serde_json::json!({"schema":"m8s.vast-demo-evidence/v1","instance_id":absent.instance_id().get(),"image":p.image,"model":p.model.served(),"api_model":p.model.request_model(),"artifact_name":p.model.label(),"certificate_verified":!matches!(client,Client::Token(_)),"admission":if matches!(client,Client::Token(_)){"token-only-provider-trusted"}else{"owner-certified"},"owner_routed_inference":true,"provider_confirmed_absent":true,"reserved_micro_usd":reserved.reserved_all_in,"final_billing":"unknown-liability-retained","resource_row_removed":true,"completion":completion}),
     )
 }
 // Container "running" can precede SSH startup. A TCP listener is only
@@ -520,6 +554,7 @@ async fn bootstrap(
         )
         .map_err(|_| ERROR)?;
     let (signing_key, mesh_owner_id) = match &client {
+        Client::Token(_) => return Err("token-mode-cannot-use-certified-bootstrap"),
         Client::Dedicated(_) => (
             *signer_key.verifying_key().as_bytes(),
             signer_key.owner_id(),
@@ -555,6 +590,7 @@ async fn bootstrap(
     let pin = Mp001TrustPin::new(owner, signing_key).map_err(|_| ERROR)?;
     let port = client.port();
     let mut signer = match client {
+        Client::Token(_) => return Err("token-mode-cannot-use-certified-bootstrap"),
         Client::Dedicated(_) => {
             Signer::Dedicated(Mp001NodeSigner::new(signer_key, &pin, 1800, 5).map_err(|_| ERROR)?)
         }

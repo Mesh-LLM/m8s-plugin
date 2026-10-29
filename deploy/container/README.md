@@ -45,8 +45,8 @@ no `flint-model` build context and no custom weight-download bootstrap script.
 
 The complete CLI → Vast → canonical certificate → native mesh → owner-routed
 Qwen inference → exact destruction/absence path **passed**, exit 0, on instance
-**57330173**. See [the complete receipt](demo-proof.json) and
-[the final account observation](final-account-evidence.json).
+the historical rental. See [the complete receipt](../../docs/HISTORICAL_EVIDENCE.md) and
+[the final account observation](../../docs/HISTORICAL_EVIDENCE.md).
 
 The working image is
 `ghcr.io/joabzzz/m8s-prototype@sha256:760aa7ae9f27775e0c7a408dbbd2b2ad1801f28401df9adf60cf5f9bb8e964e9`.
@@ -75,7 +75,7 @@ mapping also exposed a parser incompatibility with normal dual-stack responses.
 The launch now uses the documented explicit `host:container/protocol` syntax;
 the parser accepts the same wildcard port across IPv4/IPv6 and still rejects
 missing UDP or conflicting destinations. These corrections were subsequently exercised by the successful instance
-57330173 recorded at the top of this document.
+the historical rental recorded at the top of this document.
 Port syntax follows the [official Vast Docker environment documentation](https://github.com/vast-ai/docs/blob/main/guides/instances/docker-environment.mdx).
 
 The independent cleanup worker destroyed the exact instance. A separate

@@ -31,7 +31,7 @@ provider cleanup failures require further fault qualification and operations.
 
 ## Evidence and implementation
 
-- [Cleanup receipt and watchdog events](../../deploy/container/demo-proof.json)
-- [Independent inventories and retained reservations](../../deploy/container/final-account-evidence.json)
+- [Cleanup receipt and watchdog events](../HISTORICAL_EVIDENCE.md)
+- [Independent inventories and retained reservations](../HISTORICAL_EVIDENCE.md)
 - [Daemon persistence contract](../../crates/m8sd/README.md)
 - [Vast provider contract](../../crates/m8s-provider/src/vast/README.md)

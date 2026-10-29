@@ -1,11 +1,11 @@
 # Qwen3.8 27B live demo
 
 On 2026-10-23, **m8sd + m8s up/scale/status/logs/down** served the exact model
-through mesh-llm on Vast instance **57433800**. The automatic owner-routed canary
+through mesh-llm on Vast historical instance. The automatic owner-routed canary
 returned a sensible completion and the coordinator exited successfully after
 provider-confirmed destruction. Fresh full inventories contained no instances
-or volumes. See the [live proof](../deploy/container/qwen38-live-proof.json) and
-[final account observation](../deploy/container/qwen38-final-account-evidence.json).
+or volumes. See the [live proof](HISTORICAL_EVIDENCE.md) and
+[final account observation](HISTORICAL_EVIDENCE.md).
 
 > A mesh network is a distributed network where each device acts as both a host
 > and a relay, allowing data to travel along multiple paths for improved
@@ -46,7 +46,7 @@ Use the immutable image:
 ghcr.io/joabzzz/m8s-prototype@sha256:5266fe6e7e824cd4e343b084d74c9b251cdec130d12b72fbb8349f940f8048a6
 ```
 
-The [image receipt](../deploy/container/qwen38-product-image-qualification.json)
+The [image receipt](HISTORICAL_EVIDENCE.md)
 records native source 962aeb2faabe74f5fa809b8b61eaad2f9b816e18,
 llama.cpp a37cc46104eb50900d5ab4a9ba02a0abdac039db, patched revision
 6085189ee2b42cad0a296bebdab486cae3a58dbe, runtime 0.76.1 and ABI 0.1.71.
@@ -72,8 +72,7 @@ product integrity gate. CPU-only qualification is not GPU inference proof.
   unresolved, so automatic selection follows the proven larger-RAM profile.
 - Direct UDP mappings and host-key-pinned SSH, certificate-required native
   client/server and the owner signer. Keep canonical iroh TLS and trust checks.
-- Explicitly selected credential file containing `VAST_API_KEY`. This session
-  used `/Users/sandro/Development/m8s/.env`; never source it or put its value in
+- Explicitly selected credential file containing `VAST_API_KEY`. Never source the file or put its value in
   argv, logs, state, build contexts or commits. Tests use synthetic credentials.
 - Fresh authoritative credits and complete instance/volume inventories, exact
   absence of prior rentals, and an allowance after all remaining liabilities.
@@ -88,7 +87,7 @@ cleanup cannot exceed 1800 seconds. Independent cleanup must be armed before CRE
 
 The user explicitly authorized audited conservative reconciliation of destroyed
 runs instead of retaining full launch allowances. The original journals and
-consumed claims remain unchanged; [reconciliation receipts](../deploy/container/qwen38-authorized-reconciliation-sixth.json)
+consumed claims remain unchanged; [reconciliation receipts](HISTORICAL_EVIDENCE.md)
 retain uncertain exposure and do not invent final billing. Never reset a claim,
 replay an uncertain CREATE, or launch overlapping rentals.
 
@@ -96,11 +95,10 @@ replay an uncertain CREATE, or launch overlapping rentals.
 
 1. Obtain the pinned owner client from the [proven release](https://github.com/joabzzz/m8s/releases/tag/prototype-proof-2026-10-23)
    or its qualified source build; verify its hash. Build the local controller/CLI.
-   In the coordinated development workspace, every Cargo/build/check command
-   uses the shared helper (Rust 1.98, max two jobs, no alternate target directory):
+   Coordinate Cargo/build/check commands serially with at most two jobs:
 
    ```sh
-   python3 /Users/sandro/Development/m8s/m8s-session-control/with-build-lock.py cargo build --locked -j2 -p m8s-cli -p m8sd --features m8s-cli/prototype-vast,m8sd/prototype-vast
+   cargo build --locked -j2 -p m8s-cli -p m8sd --features m8s-cli/prototype-vast,m8sd/prototype-vast
    ```
 
 2. Read the [fresh-run procedure](../.agents/skills/m8s-demo/references/run-demo.md)
