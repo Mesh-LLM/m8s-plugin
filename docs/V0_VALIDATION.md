@@ -58,6 +58,15 @@ Stock GPU inference and the replacement desktop recording remain unverified.
 4. Review and replace the demo only after successful capture. The current
    README cover deliberately says architecture preview and qualification pending.
 
-The app still embeds upstream `b4b33ef8`. A standalone main host handshake does
-not establish compatibility of that embedded runtime with the new worker.
+The app still embeds upstream `b4b33ef8` (reports `0.72.1`). Its rebuilt headless
+backend passed a local test with stock main: the app created a private passive
+mesh, the main node joined through its token, each observed one peer, and the app
+returned token-only status through the real shared plugin adapter. Both processes
+stopped afterward, with no provider calls or rentals. This establishes local
+admission and adapter interoperability, not GPU inference or the live demo.
+
+The first Linux CUDA build completed native compilation but failed during
+packaging because its builder lacked `patchelf`. The repaired builder includes
+that dependency and preserves its filesystem across failures. The product build
+and image qualification are still pending.
 Raw logs, identities, captures and accounting evidence remain private.

@@ -13,6 +13,10 @@ source remain. Machine-local provenance paths were removed from the vendor note 
 The obsolete operational continuation handoff and historical demo media were
 also removed after preservation.
 Historical documentation links now identify the archived evidence scope.
+The container README's embedded historical billing, resource identifiers,
+machine paths and contradictory cutover snapshots were separately preserved
+and replaced with a current source/build guide. This changes the current tree
+only; the old documentation remains in Git history.
 
 A separate scan inspected 412 blobs reachable from fetched local Git refs. It
 checked the explicitly selected Vast key, common GitHub/AWS token patterns and

@@ -24,7 +24,10 @@ The plugin and opt-in desktop adapter share `m8s.operator/v0`. Requests cannot
 replace credentials, target files, image, executable or budget policy. Quotes
 expire, launch intent is durable before effects, and consumed attempts cannot
 be retried through the interface. Existing independent cleanup, exact absence
-confirmation and conservative accounting remain required.
+confirmation and conservative accounting remain required. The owner watchdog
+survives launcher exit, not loss of the owner machine or provider outages. The
+remote supervisor's deadline stops inference but does not destroy the billable
+instance. Uncertain cleanup retains liability and blocks another attempt.
 
 This is a constrained demonstration path, not general multi-host attribution or
 persistent instances. A build against the main SDK is not live qualification.
