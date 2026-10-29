@@ -107,6 +107,8 @@ The worker carries forward the prototype's bounded download settings: both Hub
 and Xet retry limits are zero, with an isolated cache and implicit Hub credentials
 disabled. It also uses one inference slot, a 4096-token context and no draft model.
 These controls do not replace the transfer reserve, rental deadline, or independent
-cleanup. The actual main binary passed a synthetic Hub metadata-failure check;
-Xet/model transfer and the complete image size still require qualification before
-using a paid launch plan. See the validation checkpoint for the exact scope.
+cleanup. The actual main binary passed synthetic Xet reconstruction and payload failure
+checks. Metadata fallback resolvers can still retry; these settings are not a
+global no-retry guarantee. Complete image size and real model transfer accounting
+still require qualification before a paid launch plan. See the validation
+checkpoint for the exact scope.

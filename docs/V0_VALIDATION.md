@@ -25,14 +25,23 @@ Stock GPU inference and the replacement desktop recording remain unverified.
   all 48 mocked browser tests passed. Recorder/editor syntax checks passed.
   These are implementation checks, not GPU or real-conversation acceptance.
 
-- With the actual stock-main host binary and a synthetic local Hub endpoint
-  returning HTTP 503, `MESH_HF_RETRY_MAX_ATTEMPTS=0` produced one request per
-  metadata endpoint and exited with an error without retrying. This checks Hub
-  metadata failures only; it does not exercise Xet CAS or model transfer.
+- Two isolated stock-main passive nodes with independent identities joined the
+  same mesh through a private join file, each observed one peer, and both stopped
+  cleanly. This verifies local token admission, not remote GPU inference or
+  compatibility with the app's older embedded runtime.
+- The actual stock-main binary passed synthetic HTTP 503 probes at the Xet CAS
+  reconstruction and payload endpoints: each distinct failed range was requested
+  once, and download failed without a retry. Reproduce with
+  `node deploy/container/qualify_stock_download.mjs /absolute/mesh-llm cas`
+  and the same command ending in `payload`. These use local synthetic services,
+  isolated caches and no provider credentials or real weights.
 - The worker sets both upstream retry controls (`MESH_HF_RETRY_MAX_ATTEMPTS`
   and `HF_XET_CLIENT_RETRY_MAX_ATTEMPTS`) to zero and limits inference to one
-  slot, 4096 context tokens and no draft model. The Xet control was checked in
-  the pinned dependency source; actual transfer qualification remains pending.
+  slot, 4096 context tokens and no draft model. These are not a global no-retry
+  guarantee: a separate pinned-reference Hub metadata failure probe entered a
+  fallback resolver that repeated requests. The Xet assertions above deliberately
+  exclude metadata lookup behavior. Full-image size and real transfer accounting
+  still require qualification; the transfer reserve and cleanup remain mandatory.
 
 ## Still required
 
