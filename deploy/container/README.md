@@ -22,6 +22,13 @@ builder filesystem across failures: native compilation can finish before a
 packaging dependency failure. Do not edit ABI or architecture metadata to force
 acceptance, or substitute a private-fork runtime.
 
+The experimental [stock builder recipe](Dockerfile.stock-builder) records the
+current main/toolchain pins and the single-GPU `GGML_CUDA_NCCL=OFF` build option.
+The CUDA devel base auto-enables NCCL otherwise, but upstream's package validator
+does not include NCCL in its reviewed redistributables. The recipe keeps that
+validator unchanged. Its `product` target exports the upstream archives; it is
+not the worker image. Qualification is still pending as recorded above.
+
 Prepare a minimal context containing only:
 
 - `Dockerfile.stock`, `vast_provision.py`, and `token_provision.py`;

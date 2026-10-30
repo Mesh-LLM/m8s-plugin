@@ -85,6 +85,11 @@ admission behavior locally; it does not establish ownership certification.
 
 The first Linux CUDA build completed native compilation but failed during
 packaging because its builder lacked `patchelf`. The repaired builder includes
-that dependency and preserves its filesystem across failures. The product build
-and image qualification are still pending.
+that dependency and preserves its filesystem across failures. A subsequent
+packaging attempt rejected `libnccl.so.2`: the CUDA devel image installed NCCL,
+which the native build auto-enabled, while upstream's runtime packaging policy
+allows only its reviewed CUDA redistributables. The next build uses upstream's
+existing `-DGGML_CUDA_NCCL=OFF` CMake option for this single-GPU profile, followed
+by the unchanged packaging recipe. No source or dependency-policy patch is
+applied. The product build and image qualification are still pending.
 Raw logs, identities, captures and accounting evidence remain private.
