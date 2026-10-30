@@ -57,7 +57,7 @@ class TokenProvisionTests(unittest.TestCase):
                 output=io.StringIO()
                 with patch.object(target.common,'ROOT',root), \
                      patch.object(target.os,'geteuid',return_value=target.common.UID), \
-                     patch.dict(target.os.environ,{'SSH_ORIGINAL_COMMAND':'join-v0'}), \
+                     patch.dict(target.os.environ,{'SSH_ORIGINAL_COMMAND':'join-v0','CONTAINER_API_KEY':'synthetic-instance-secret'}), \
                      patch.object(target.signal,'alarm'), patch.object(target.signal,'signal'), \
                      patch.object(target.sys,'stdin',type('Input',(),{'buffer':io.BytesIO(self.frame(config))})()), \
                      patch.object(target.sys,'stdout',output), \
@@ -70,6 +70,9 @@ class TokenProvisionTests(unittest.TestCase):
                 self.assertEqual(spawn.call_args.kwargs['env']['MESH_HF_RETRY_MAX_ATTEMPTS'],'0')
                 self.assertEqual(spawn.call_args.kwargs['env']['HF_XET_CLIENT_RETRY_MAX_ATTEMPTS'],'0')
                 self.assertEqual(spawn.call_args.kwargs['env']['MESH_LLM_NO_DEFAULT_PLUGINS'],'1')
+                self.assertEqual(spawn.call_args.kwargs['env']['LD_LIBRARY_PATH'],'/usr/local/nvidia/lib64:/usr/local/nvidia/lib')
+                self.assertEqual(spawn.call_args.kwargs['env']['PATH'],'/usr/local/nvidia/bin:/usr/bin:/bin')
+                self.assertNotIn('CONTAINER_API_KEY',spawn.call_args.kwargs['env'])
                 self.assertEqual([c.args for c in kill.call_args_list], [(456,target.signal.SIGTERM),(456,target.signal.SIGKILL)])
                 self.assertEqual(child.wait.call_count,2)
                 self.assertEqual(child.wait.call_args_list[0].kwargs,{'timeout':3})

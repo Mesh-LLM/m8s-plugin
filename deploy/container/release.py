@@ -154,7 +154,8 @@ def audit_dockerfiles(directory):
         for number, line in enumerate(text.splitlines(), 1):
             if line.startswith('FROM '):
                 ref = line.split()[1]
-                if not (DIGEST.search(ref) or re.fullmatch(r'\$\{[A-Z_]+\}', ref)):
+                # Docker's built-in empty filesystem has no registry dependency.
+                if not (ref == 'scratch' or DIGEST.search(ref) or re.fullmatch(r'\$\{[A-Z_]+\}', ref)):
                     problems.append(f'{path.name}:{number}: unpinned base {ref}')
             if '--secret' in line or re.search(r'\bADD\s+https?://', line):
                 problems.append(f'{path.name}:{number}: secret mount or remote ADD')
