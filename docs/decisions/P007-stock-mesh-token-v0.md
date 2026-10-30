@@ -1,6 +1,6 @@
 # P007: Explicit token-only admission for stock-Mesh v0
 
-Status: implemented experimentally; stock runtime and live acceptance pending.
+Status: implemented experimentally; stock runtime built; live inference acceptance pending.
 
 P001 remains the desired owner-certified admission contract. The scoped review
 of upstream main found no documented plugin host operation for issuing the
@@ -42,3 +42,21 @@ launch and removal remain serialized, and durable launch intent still precedes
 effects. Status may observe an incomplete new file and must project it
 conservatively as unready. A UI status poll must not make concurrent provider
 discovery report missing credentials or prevent cleanup/status observation.
+
+
+### Startup observations after the first stock-image attempt
+
+The first paid stock-image attempt did not discover a worker or complete a canary
+within its readiness deadline. The UI removed the rental and an independent
+provider inventory confirmed absence. Its reservation remains retained because
+billing is unsettled. Provider running state alone did not identify whether
+startup was waiting on model transfer, runtime initialization or mesh admission.
+
+The restricted SSH key therefore also permits the exact read-only `status-v0`
+command. It returns a bounded, whitelisted projection of worker phase, process,
+cache and network counters; it cannot execute a shell or expose raw logs, paths,
+keys or invites. Status does not consume the one-shot join claim. The CLI polls
+through the same pinned host key and records observations privately. The plugin
+only exposes observations bound to the exact resource/image and at most 30
+seconds old. A worker reporting its mesh identity is not proof of peer discovery
+or inference. Existing canary gates and cleanup deadlines remain authoritative.

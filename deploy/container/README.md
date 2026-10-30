@@ -36,7 +36,9 @@ docker buildx build --platform linux/amd64 --target product \
   -f deploy/container/Dockerfile.stock-builder "$EMPTY_BUILD_CONTEXT"
 ```
 
-Qualification is still pending as recorded above.
+The [recorded image build contract](stock-image.json) identifies the published
+stock worker and exact source/product pins. Local product and SSH checks and
+anonymous digest access passed; remote GPU acceptance remains pending.
 
 Prepare a minimal context containing only:
 

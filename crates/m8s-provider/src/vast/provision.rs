@@ -177,6 +177,140 @@ impl ProvisionPacket {
 pub struct ProvisioningSession {
     child: Child,
 }
+
+/// Read bounded observations using the same pinned endpoint and restricted key.
+/// This is not an admission, model-readiness, ownership or cleanup receipt.
+pub async fn token_status(
+    access: &NodeAccess,
+    host: &HostPublicKey,
+    root: &Path,
+    identity: &Path,
+) -> Result<Value> {
+    if !host.matches_access(access)
+        || !literal_path(identity)
+        || identity.parent() != Some(root)
+        || identity.canonicalize().map_err(|_| Error::Invalid)? != identity
+    {
+        return Err(Error::Invalid);
+    }
+    let _directory = private_directory(root)?;
+    let key = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(identity)
+        .map_err(|_| Error::Invalid)?;
+    private_file(&key)?;
+    let known = root.join("provision-known-hosts");
+    let mut pinned = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(&known)
+        .map_err(|_| Error::Invalid)?;
+    private_file(&pinned)?;
+    if pinned.metadata().map_err(|_| Error::Invalid)?.len() > 1024 {
+        return Err(Error::Invalid);
+    }
+    let mut contents = String::new();
+    std::io::Read::read_to_string(&mut std::io::Read::take(&mut pinned, 1025), &mut contents)
+        .map_err(|_| Error::Invalid)?;
+    let address = access.ssh_address();
+    if contents
+        != format!(
+            "[{}]:{} {}\n",
+            address.ip(),
+            address.port(),
+            host.as_openssh()
+        )
+    {
+        return Err(Error::Invalid);
+    }
+    let mut child = command_for("status-v0", root, identity, &known, address)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| Error::Unavailable)?;
+    let result = tokio::time::timeout(Duration::from_secs(10), async {
+        let stdout = child.stdout.take().ok_or(Error::Unavailable)?;
+        let mut bytes = Vec::new();
+        stdout
+            .take(8193)
+            .read_to_end(&mut bytes)
+            .await
+            .map_err(|_| Error::Unavailable)?;
+        if bytes.len() > 8192 {
+            return Err(Error::Invalid);
+        }
+        if !child
+            .wait()
+            .await
+            .map_err(|_| Error::Unavailable)?
+            .success()
+        {
+            return Err(Error::Unavailable);
+        }
+        project_token_status(&serde_json::from_slice(&bytes).map_err(|_| Error::Invalid)?)
+    })
+    .await
+    .map_err(|_| Error::Unavailable)
+    .and_then(|v| v);
+    let _ = child.kill().await;
+    result
+}
+
+fn project_token_status(value: &Value) -> Result<Value> {
+    let phase = value["phase"]
+        .as_str()
+        .filter(|s| {
+            matches!(
+                *s,
+                "awaiting_join"
+                    | "unknown"
+                    | "starting"
+                    | "waiting_for_mesh"
+                    | "joined"
+                    | "stopped"
+            )
+        })
+        .ok_or(Error::Invalid)?;
+    if value["schema"] != "m8s.token-worker-status/v0" {
+        return Err(Error::Invalid);
+    }
+    let mut result = serde_json::json!({"schema":"m8s.token-worker-status/v0","phase":phase});
+    for key in [
+        "elapsed_seconds",
+        "cache_file_bytes",
+        "cache_allocated_bytes",
+        "cache_file_count",
+        "cache_incomplete_files",
+        "worker_rss_bytes",
+        "worker_read_bytes",
+        "worker_write_bytes",
+        "network_received_bytes",
+        "network_sent_bytes",
+    ] {
+        if let Some(n) = value[key].as_u64() {
+            result[key] = n.into();
+        }
+    }
+    for key in [
+        "worker_running",
+        "api_reachable",
+        "mesh_matches",
+        "cache_scan_truncated",
+    ] {
+        if let Some(v) = value[key].as_bool() {
+            result[key] = v.into();
+        }
+    }
+    if let Some(code) = value["worker_exit_code"]
+        .as_i64()
+        .filter(|n| (-255..=255).contains(n))
+    {
+        result["worker_exit_code"] = code.into();
+    }
+    Ok(result)
+}
+
 impl ProvisioningSession {
     pub async fn start(
         access: &NodeAccess,

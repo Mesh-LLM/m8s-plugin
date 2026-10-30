@@ -139,6 +139,37 @@ pub(super) async fn serve(
     .map_err(|_| ERROR)?;
     eprintln!("prototype stage: token-delivered-over-pinned-ssh");
     let complete = std::sync::atomic::AtomicBool::new(false);
+    let observations = async {
+        let mut sequence = 0_u32;
+        let mut last_phase = String::new();
+        loop {
+            if let Ok(worker) = m8s_provider::vast::provision::token_status(
+                access,
+                host,
+                directory,
+                &directory.join("provision-key"),
+            )
+            .await
+            {
+                let phase = worker["phase"].as_str().unwrap_or("unknown");
+                if phase != last_phase {
+                    eprintln!("prototype worker observation: {phase}");
+                    last_phase = phase.to_owned();
+                }
+                let value = json!({"schema":"m8s.token-observation/v0",
+                    "instance_id":access.instance_id().get(),"image":image,
+                    "observed_at":super::owner::utc().unwrap_or(0),"worker":worker});
+                let temp = directory.join(format!("token-observation-{sequence}.tmp"));
+                if let Ok(bytes) = serde_json::to_vec(&value)
+                    && super::owner::private_file(&temp, &bytes).is_ok()
+                {
+                    let _ = std::fs::rename(&temp, directory.join("token-observation.json"));
+                }
+                sequence += 1;
+            }
+            tokio::time::sleep(Duration::from_secs(10)).await;
+        }
+    };
     let work = async {
         let worker = session
             .token_identity(Duration::from_secs(remaining))
@@ -231,7 +262,11 @@ pub(super) async fn serve(
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
     };
-    let result = tokio::select! {result=work=>result, _=cancelled=>Err("token-work-cancelled")};
+    let result = tokio::select! {
+        result=work=>result,
+        _=cancelled=>Err("token-work-cancelled"),
+        _=observations=>Err("token-observation-ended"),
+    };
     let _ = session.stop().await;
     result
 }

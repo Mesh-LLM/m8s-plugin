@@ -1,6 +1,7 @@
 # Proposed v0: token-based rental attachment
 
-Status: implementation in progress; stock runtime and end-to-end acceptance pending.
+Status: implemented with a published, locally qualified stock worker; remote GPU
+and end-to-end acceptance pending.
 The certified prototype remains separate from the explicit token-only path.
 
 The v0 goal is to attach one bounded Vast rental to a selected mesh using a
@@ -82,7 +83,9 @@ SHA-256, with an explicitly pinned runtime base. Use upstream's `just` build and
 packaging recipes from a recorded main commit. No private fork artifact or native
 metadata patch is a substitute. The official `v0.78.1` release resolved to a
 commit outside the checked main tip's ancestry, so it was not accepted as a main
-qualification artifact. Building/qualifying the correct main image remains a gate.
+qualification artifact. The matching main product was built and its worker passed local qualification;
+[the build contract](../deploy/container/stock-image.json) records its published digest.
+Remote GPU acceptance remains a separate gate.
 
 The actual stock-main plugin handshake and a read-only MCP status call passed;
 see [the validation checkpoint](V0_VALIDATION.md). Before declaring v0 complete, test denied
@@ -100,8 +103,9 @@ The checked main host requires Skippy ABI `0.1.74`. The downloaded official
 `v0.78.1` Linux CUDA product declares ABI `0.1.66`; its CUDA architecture list
 also does not include the SM120 devices required by the current Qwen profile.
 It cannot be substituted or relabeled. A matching stock-main Linux CUDA/SM120
-product must be built and qualified, including native model-download transfer
-bounds, before authorizing a launch plan with this image.
+product has now been built without altering upstream source or packaging policy.
+Its image passed local SSH checks and anonymous digest access. Native GPU execution,
+real download behavior and provider-confirmed cleanup remain live acceptance gates.
 
 The Mac's default Rust 1.92 compiler rejects main's `AtomicUsize::try_update`.
 The unmodified main host and console built successfully using the installed

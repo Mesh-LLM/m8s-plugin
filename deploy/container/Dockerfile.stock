@@ -19,6 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && groupadd --gid 65532 m8s \
     && useradd --uid 65532 --gid 65532 --no-create-home --home-dir /var/lib/m8s --shell /bin/sh --password '*' m8s \
     && mkdir -p /run/sshd
-COPY --chmod=0555 vast_provision.py token_provision.py /usr/local/lib/m8s/
+COPY --chmod=0555 vast_provision.py token_provision.py token_status.py /usr/local/lib/m8s/
 EXPOSE 2222/tcp 40100/udp
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/bin/python3", "/usr/local/lib/m8s/token_provision.py", "serve"]

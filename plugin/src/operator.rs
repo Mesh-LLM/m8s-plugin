@@ -261,6 +261,63 @@ fn worker_present(status: &Value, ready: &Value) -> bool {
                 })
         })
 }
+fn worker_observation(
+    value: Option<&Value>,
+    node: Option<&Value>,
+    plan: &Value,
+    at: u64,
+) -> Option<Value> {
+    let (value, node) = (value?, node?);
+    let instance = value["instance_id"].as_u64().filter(|id| *id > 0)?;
+    if value["schema"] != "m8s.token-observation/v0"
+        || value["image"] != plan["image"]
+        || node["instance_id"].as_u64() != Some(instance)
+        || value["observed_at"]
+            .as_u64()
+            .and_then(|n| at.checked_sub(n))
+            .is_none_or(|age| age > 30)
+    {
+        return None;
+    }
+    let worker = &value["worker"];
+    let phase = worker["phase"].as_str().filter(|p| {
+        matches!(
+            *p,
+            "awaiting_join" | "unknown" | "starting" | "waiting_for_mesh" | "joined" | "stopped"
+        )
+    })?;
+    if worker["schema"] != "m8s.token-worker-status/v0" {
+        return None;
+    }
+    let mut result = json!({"phase":phase,"observed_at":value["observed_at"]});
+    for key in [
+        "elapsed_seconds",
+        "cache_file_bytes",
+        "cache_allocated_bytes",
+        "cache_file_count",
+        "cache_incomplete_files",
+        "worker_rss_bytes",
+        "worker_read_bytes",
+        "worker_write_bytes",
+        "network_received_bytes",
+        "network_sent_bytes",
+    ] {
+        if let Some(n) = worker[key].as_u64() {
+            result[key] = n.into();
+        }
+    }
+    for key in [
+        "worker_running",
+        "api_reachable",
+        "mesh_matches",
+        "cache_scan_truncated",
+    ] {
+        if let Some(v) = worker[key].as_bool() {
+            result[key] = v.into();
+        }
+    }
+    Some(result)
+}
 pub async fn execute(request: Request) -> Result<Value> {
     let c = Config::load()?;
     execute_config(&c, request).await
@@ -393,6 +450,12 @@ async fn execute_config(c: &Config, request: Request) -> Result<Value> {
             });
             let evidence = read(&attempt.join("demo-evidence.json")).ok();
             let ready = read(&attempt.join("token-ready.json")).ok();
+            let observation = read(&attempt.join("token-observation.json")).ok();
+            let worker_status = if removed {
+                None
+            } else {
+                worker_observation(observation.as_ref(), node.as_ref(), &c.plan, now())
+            };
             let target = c.target()?;
             let live = verify_target(&target).await.ok();
             let active_ready = !removed
@@ -407,7 +470,7 @@ async fn execute_config(c: &Config, request: Request) -> Result<Value> {
                             .is_some_and(|status| worker_present(status, r))
                 });
 
-            json!({"provider_configured":provider_configured(&c.plan),"ready":active_ready,"offer_id":read(&intent).ok().map(|v|v["offer_id"].clone()),"expires_at":read(&intent).ok().map(|v|v["expires_at"].clone()),"removal_requested":c.root.join("down-requested").exists(),"node_id":ready.as_ref().and_then(|r|r["node_id"].as_str()),"target":{"node_id":target["node_id"],"mesh_id":target["mesh_id"]},"attempt_consumed":intent.try_exists()?,"provider_confirmed_removed":removed,"instance_id":node.as_ref().and_then(|v|v["instance_id"].as_u64()),"certificate_verified":false,"admission":"token-only-provider-trusted","inference_verified":removed&&evidence.as_ref().is_some_and(|e|e["schema"]=="m8s.vast-demo-evidence/v1"&&e["certificate_verified"]==false&&e["admission"]=="token-only-provider-trusted"&&e["owner_routed_inference"]==true&&e["provider_confirmed_absent"]==true&&e["image"]==c.plan["image"]&&node.as_ref().is_some_and(|n|e["instance_id"]==n["instance_id"]))})
+            json!({"provider_configured":provider_configured(&c.plan),"worker_status":worker_status,"ready":active_ready,"offer_id":read(&intent).ok().map(|v|v["offer_id"].clone()),"expires_at":read(&intent).ok().map(|v|v["expires_at"].clone()),"removal_requested":c.root.join("down-requested").exists(),"node_id":ready.as_ref().and_then(|r|r["node_id"].as_str()),"target":{"node_id":target["node_id"],"mesh_id":target["mesh_id"]},"attempt_consumed":intent.try_exists()?,"provider_confirmed_removed":removed,"instance_id":node.as_ref().and_then(|v|v["instance_id"].as_u64()),"certificate_verified":false,"admission":"token-only-provider-trusted","inference_verified":removed&&evidence.as_ref().is_some_and(|e|e["schema"]=="m8s.vast-demo-evidence/v1"&&e["certificate_verified"]==false&&e["admission"]=="token-only-provider-trusted"&&e["owner_routed_inference"]==true&&e["provider_confirmed_absent"]==true&&e["image"]==c.plan["image"]&&node.as_ref().is_some_and(|n|e["instance_id"]==n["instance_id"]))})
         }
     };
     Ok(json!({"schema":"m8s.operator/v0","result":result}))
@@ -415,6 +478,26 @@ async fn execute_config(c: &Config, request: Request) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn observations_are_fresh_resource_bound_and_not_readiness() {
+        let value = json!({"schema":"m8s.token-observation/v0","image":"image","instance_id":7,"observed_at":100,"worker":{"schema":"m8s.token-worker-status/v0","phase":"starting","worker_running":true,"cache_file_bytes":123,"join_token":"private-token","ready":true}});
+        let node = json!({"instance_id":7});
+        let plan = json!({"image":"image"});
+        let observed = worker_observation(Some(&value), Some(&node), &plan, 110).unwrap();
+        assert_eq!(observed["cache_file_bytes"], 123);
+        assert!(observed.get("ready").is_none());
+        assert!(!observed.to_string().contains("private"));
+        for (field, changed) in [
+            ("instance_id", json!(8)),
+            ("image", json!("other")),
+            ("observed_at", json!(79)),
+            ("observed_at", json!(111)),
+        ] {
+            let mut bad = value.clone();
+            bad[field] = changed;
+            assert!(worker_observation(Some(&bad), Some(&node), &plan, 110).is_none());
+        }
+    }
     #[tokio::test]
     async fn status_remains_available_while_a_mutation_holds_the_lock() {
         let temp = tempfile::tempdir().unwrap();

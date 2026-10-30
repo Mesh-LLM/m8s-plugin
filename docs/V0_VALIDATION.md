@@ -19,7 +19,7 @@ Stock GPU inference and the replacement desktop recording remain unverified.
   confirmed its isolated host stopped afterward.
 - The full root `scripts/check` passed, including the seven synthetic PTY/ACL
   tests previously excluded. Formatting and strict workspace Clippy passed too.
-  The plugin's five tests and strict Clippy passed; 45 container tests passed,
+  The plugin's seven tests and strict Clippy passed; 49 container tests passed,
   including interruption/denial cleanup and
   refusal to replay consumed provisioning and process-group cleanup after the
   host exits before its children.
@@ -48,7 +48,7 @@ Stock GPU inference and the replacement desktop recording remain unverified.
   budget-qualified quote was bound to the selected mesh. No launch intent or
   rental was created; the isolated app stopped afterward.
 - The companion app's Rust tests and strict Clippy passed. UI lint/build and
-  all 50 mocked browser tests passed. Recorder/editor syntax checks passed.
+  all 52 mocked browser tests passed. Recorder/editor syntax checks passed.
   These are implementation checks, not GPU or real-conversation acceptance.
 
 - Two isolated stock-main passive nodes with independent identities joined the
@@ -71,9 +71,8 @@ Stock GPU inference and the replacement desktop recording remain unverified.
 
 ## Still required
 
-1. Publish the locally checked stock-main Linux CUDA/SM120 worker and verify
-   anonymous access to its immutable digest. Registry upload is currently blocked
-   by missing GitHub package-writing scope. The
+1. Complete remote GPU/model-download qualification of the published stock-main
+   Linux CUDA/SM120 worker. The
    downloaded official v0.78.1 product has ABI 0.1.66; main requires 0.1.74.
    Its source is outside the checked main ancestry. Do not edit metadata to
    force acceptance or substitute the historical private fork.
@@ -111,8 +110,8 @@ including its console build and product archive creation. The complete product
 manifest agrees on ABI `0.1.74`; host, runtime manifest and runtime file hashes
 were checked. The archive is 803,922,519 bytes compressed and 1,268,733,464 bytes
 expanded. The local AMD64 worker image is 2,982,352,801 bytes and reports stock
-Mesh `0.78.0`; its dynamic host libraries resolve. Registry publication and GPU
-qualification remain pending. The worker retains only fixed NVIDIA driver
+Mesh `0.78.0`; its dynamic host libraries resolve. Registry publication and anonymous digest access passed; GPU qualification
+remains pending. The worker retains only fixed NVIDIA driver
 search paths in its otherwise isolated environment; it does not inherit the
 provider instance secret.
 Raw logs, identities, captures and accounting evidence remain private.
@@ -121,7 +120,9 @@ Raw logs, identities, captures and accounting evidence remain private.
 
 Checked local image ID:
 `sha256:3c5db0989a38dd3e634d181d8610c61bfc09f6af997aee5adfc37ce96365f790`.
-It is not yet an anonymously available registry reference. Its input product
+It is published as `ghcr.io/joabzzz/m8s-prototype@` followed by that digest.
+An anonymous digest pull with an empty Docker configuration passed; cached local
+layers were reused, so this is not a cold-download or GPU-execution claim. Its input product
 archive SHA-256 is
 `6ec6f1e1c763ee49731fba1910878018c15e5b1ed7295ccf4634c5d8177150b1`.
 
@@ -140,3 +141,54 @@ wrapped process; the corrected checks were rerun successfully. These checks are
 not proof of GPU execution, admission to the selected live mesh, or destruction
 of a billable provider instance. Registry authentication failures created no
 rental and consumed none of the separately authorized live budget.
+
+A first live UI capture aborted before any launch intent or controller attempt:
+concurrent status calls competed for the exclusive mutation lock, and the app
+misreported the read failure as missing provider setup. The corrected plugin
+keeps read-only status/offers independent of mutation locking; the app returns a
+retryable status error rather than inventing an unconfigured state. A regression
+test reproduced the old failure and passed after the fix. All six plugin tests,
+strict Clippy, app Rust checks and 51 browser tests passed. A rebuilt real app
+also passed twelve concurrent provider reads, UI offer browsing and a bounded
+quote. Fresh complete provider inventories were empty; the aborted capture's
+claim/evidence were preserved and only its unused pre-CREATE reservation released.
+
+
+## First paid stock-image attempt and diagnostic follow-up
+
+The published stock image reached the exact provider-observed, host-key-pinned
+SSH endpoint and received its join token. It did not produce a discovered worker
+or successful canary within the 20-minute readiness bound. No successful chat or
+replacement demo was recorded. The cause remains unresolved; provider running
+state and utilization observations cannot distinguish download, runtime and
+admission failures.
+
+The UI requested removal, the cleanup receipt confirmed exact-resource absence,
+and a separate full provider inventory confirmed no instances or volumes. The
+attempt's 1,948,965 micro-USD reservation remains conservatively counted against
+the authorized 6,000,000 micro-USD total; it is not a settled charge. Claims,
+accounting and the failed capture are preserved privately. No claim was reset.
+
+The follow-up worker adds only a bounded `status-v0` SSH projection outside
+stock Mesh. All 49 container tests pass. The exact rebuilt local image passed
+isolated SSH refusal, cancellation and deadline checks, including read-only
+status before/after provisioning and while the actual stock worker runs. Each
+check confirmed worker exit, token erasure and local container/network cleanup.
+These CPU/emulation checks do not qualify remote GPU inference. The follow-up plugin tests and strict Clippy pass, as do the app Rust tests,
+strict Clippy, UI lint/build and all 52 mocked browser tests.
+
+
+The diagnostic follow-up image is published in the personal registry at
+`ghcr.io/joabzzz/m8s-prototype@sha256:3ad6fc27f08c2d289be9bf8bef54d603295aab693ab7ce02f79065509aa9aca7`.
+Anonymous digest access with an empty Docker configuration passed; cached layers
+were reused, so this is not a cold download qualification. The stock product,
+ABI and SM120 target are unchanged. The earlier paid failure used the preceding
+`3c5db0…` image and does not establish behavior of this follow-up image.
+
+
+The follow-up full root check passed with `RUST_TEST_THREADS=1`: 840 tests
+passed, five intentionally ignored, no filtered tests; formatting and strict
+Clippy passed. Two default parallel runs failed existing private-file staging
+checks, while an isolated reproduction and the complete serial run passed.
+The concurrency-sensitive failures remain unresolved; serial success is not a
+claim that the default parallel suite is stable. No file-safety check was relaxed.

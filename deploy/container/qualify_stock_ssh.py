@@ -66,7 +66,7 @@ try:
     # Deliberately pin the unrelated client public key as the expected host.
     (root/'wrong-hosts').write_text('['+name+']:'+port+' '+pub+'\n')
     def ssh(known, command, frame=None):
-        args = ['docker', 'run', '--rm', '-i', '--name', name+'-client', '--platform', 'linux/amd64', '--network', network, '--mount', 'type=bind,src='+str(root)+',dst=/proof,readonly', '--entrypoint', '/usr/bin/ssh', image, '-F', '/dev/null', '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes',
+        args = ['docker', 'run', '--rm', '-i', '--name', name+('-status' if command == 'status-v0' else '-client'), '--platform', 'linux/amd64', '--network', network, '--mount', 'type=bind,src='+str(root)+',dst=/proof,readonly', '--entrypoint', '/usr/bin/ssh', image, '-F', '/dev/null', '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes',
                 '-o', 'StrictHostKeyChecking=yes', '-o', 'GlobalKnownHostsFile=/dev/null',
                 '-o', 'UserKnownHostsFile=/proof/'+known, '-o', 'ConnectTimeout=5',
                 '-i', '/proof/client', '-p', port, 'm8s@'+name, command]
@@ -81,6 +81,10 @@ try:
                     if child.poll() is not None: break
                     time.sleep(0.1)
                 result['worker_observed_running']= 'worker' in pids and 'supervisor' in pids
+                if result['worker_observed_running']:
+                    observed_status = ssh('known-hosts', 'status-v0')
+                    projected = json.loads(observed_status.stdout)
+                    result['running_status_observed'] = observed_status.returncode == 0 and projected.get('worker_running') is True and token not in observed_status.stdout
                 if mode == 'cancel' and result['worker_observed_running']:
                     checked(['docker','exec',name,'kill','-TERM',str(pids['supervisor'])])
                     result['supervisor_signalled']=True
@@ -89,6 +93,8 @@ try:
             finally:
                 if child.poll() is None: child.kill(); child.wait()
         return subprocess.run(args, input=frame, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+    initial_status = ssh('known-hosts', 'status-v0')
+    result['status_does_not_consume_invite'] = initial_status.returncode == 0 and json.loads(initial_status.stdout).get('phase') == 'awaiting_join' and not exists('provision-consumed')
     wrong = ssh('wrong-hosts', 'join-v0', b'not-a-token')
     result['wrong_host_rejected_before_consumption'] = wrong.returncode == 255 and not exists('provision-consumed')
     denied = ssh('known-hosts', 'uname', b'not-a-token')
@@ -111,6 +117,9 @@ try:
     result['elapsed_seconds']=time.monotonic()-started
     result['bounded_refusal_and_token_erasure'] = first.returncode != 0 and time.monotonic()-started < 12 and exists('provision-consumed') and not exists('join-token')
     result['no_readiness_or_token_output'] = not first.stdout and token not in first.stderr
+    final_status = ssh('known-hosts', 'status-v0')
+    projected = json.loads(final_status.stdout)
+    result['stopped_status_without_token'] = final_status.returncode == 0 and projected.get('phase') == 'stopped' and projected.get('worker_running') is False and token not in final_status.stdout
     again = ssh('known-hosts', 'join-v0', frame)
     result['replay_rejected'] = again.returncode != 0 and not again.stdout and not exists('join-token')
     for _ in range(20):
@@ -120,15 +129,16 @@ try:
             result['worker_process_absent'] = True
             break
         time.sleep(0.1)
-    result['passed'] = all(result.get(k) is True for k in ['wrong_host_rejected_before_consumption','unapproved_command_rejected_before_consumption','bounded_refusal_and_token_erasure','no_readiness_or_token_output','replay_rejected','worker_process_absent'])
+    result['passed'] = all(result.get(k) is True for k in ['status_does_not_consume_invite','stopped_status_without_token','wrong_host_rejected_before_consumption','unapproved_command_rejected_before_consumption','bounded_refusal_and_token_erasure','no_readiness_or_token_output','replay_rejected','worker_process_absent'])
     if mode != 'refusal':
-        result['passed'] = result['passed'] and result.get('worker_observed_running') is True
+        result['passed'] = result['passed'] and result.get('worker_observed_running') is True and result.get('running_status_observed') is True
         if mode == 'cancel': result['passed'] = result['passed'] and result.get('supervisor_signalled') is True
         else: result['passed'] = result['passed'] and result['elapsed_seconds'] >= config['lifetime_seconds']
 except Exception as error:
     result['error'] = str(error)
 finally:
     run(['docker','rm','-f',name+'-client'])
+    run(['docker','rm','-f',name+'-status'])
     (root/'container-log.txt').write_bytes(run(['docker','logs',name]).stdout)
     (root/'container-state.txt').write_bytes(run(['docker','inspect','--format','{{json .State}} {{json .NetworkSettings.Ports}} {{json .HostConfig.PortBindings}}',name]).stdout)
     removed = run(['docker','rm','-f',name])

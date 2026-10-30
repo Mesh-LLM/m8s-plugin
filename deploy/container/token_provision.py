@@ -14,6 +14,7 @@ import sys
 import time
 import urllib.request
 import vast_provision as common
+import token_status
 
 MAGIC = b'M8S-TOKEN-JOIN-V0\n'
 FIELDS = {'schema', 'instance_id', 'image_sha256', 'model', 'mesh_id', 'lifetime_seconds'}
@@ -46,6 +47,10 @@ def command(config):
 
 
 def receive():
+    if os.environ.get('SSH_ORIGINAL_COMMAND') == 'status-v0':
+        common.require(os.geteuid() == common.UID)
+        print(json.dumps(token_status.read(common.ROOT)), flush=True)
+        return
     common.require(os.geteuid() == common.UID and os.environ.get('SSH_ORIGINAL_COMMAND') == 'join-v0')
     signal.alarm(30)
     common.write_new(common.ROOT / 'provision-consumed', b'token-join-v0\n')
@@ -56,7 +61,10 @@ def receive():
     del token
     common.sync_directory(common.ROOT)
     signal.alarm(0)
-    deadline = time.monotonic() + config['lifetime_seconds']
+    started = time.monotonic()
+    deadline = started + config['lifetime_seconds']
+    observed = started
+    last_snapshot = float('-inf')
     child = None
     def stop(_signal, _frame):
         raise InterruptedError('worker stopped')
@@ -78,21 +86,33 @@ def receive():
                                       'MESH_HF_RETRY_MAX_ATTEMPTS': '0',
                                       'HF_XET_CLIENT_RETRY_MAX_ATTEMPTS': '0',
                                       'MESH_LLM_ANALYTICS': '0', 'DO_NOT_TRACK': '1'})
-        while child.poll() is None and time.monotonic() < deadline:
-            if not announced:
+        token_status.snapshot(common.ROOT, 'starting', 0, child)
+        while child.poll() is None:
+            observed = time.monotonic()
+            if observed >= deadline:
+                break
+            if observed - last_snapshot >= 1:
+                api_reachable, mesh_matches, identity_ready = False, False, False
                 try:
                     with opener.open('http://127.0.0.1:3131/api/status', timeout=1) as r:
                         raw = r.read(65537)
                     common.require(len(raw) <= 65536)
                     status = json.loads(raw)
+                    api_reachable = True
+                    mesh_matches = status.get('mesh_id') == config['mesh_id']
                     node = status.get('node_id')
                     common.require(type(node) is str and len(node) in (10, 64) and all(c in '0123456789abcdef' for c in node))
-                    common.require(status.get('mesh_id') == config['mesh_id'])
-                    print(json.dumps({'schema': 'm8s.token-worker/v0', 'node_id': node,
-                                      'mesh_id': config['mesh_id'], 'certificate_verified': False}), flush=True)
-                    announced = True
+                    common.require(mesh_matches)
+                    identity_ready = True
+                    if not announced:
+                        print(json.dumps({'schema': 'm8s.token-worker/v0', 'node_id': node,
+                                          'mesh_id': config['mesh_id'], 'certificate_verified': False}), flush=True)
+                        announced = True
                 except (ValueError, OSError):
                     pass  # Admission/readiness remains unconfirmed; never weaken policy.
+                phase = 'joined' if identity_ready else ('waiting_for_mesh' if api_reachable else 'starting')
+                token_status.snapshot(common.ROOT, phase, observed - started, child, api_reachable, mesh_matches)
+                last_snapshot = observed
             time.sleep(0.25)
     finally:
         try:
@@ -115,6 +135,10 @@ def receive():
                     child.wait()
         finally:
             (common.ROOT / 'join-token').unlink(missing_ok=True)
+            try:
+                token_status.snapshot(common.ROOT, 'stopped', observed - started, child)
+            except OSError:
+                pass  # Observability cannot prevent teardown or token erasure.
     common.require(announced)
 
 
