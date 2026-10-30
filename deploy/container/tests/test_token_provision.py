@@ -5,7 +5,7 @@ from pathlib import Path
 import struct
 import sys
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -79,6 +79,52 @@ class TokenProvisionTests(unittest.TestCase):
                 self.assertFalse((root/'join-token').exists())
                 self.assertEqual(output.getvalue(),'')
                 self.assertTrue((root/'provision-consumed').exists())
+    def test_download_recovery_is_once_and_keeps_original_deadline_and_identity(self):
+        for changed_identity in (False, True):
+            with self.subTest(changed_identity=changed_identity), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); (root / 'instance-id').write_text('123')
+                first, second = Mock(pid=456), Mock(pid=457)
+                first.poll.return_value = second.poll.return_value = None
+                status = {'node_id': 'a' * 10, 'mesh_id': 'b' * 16, 'node_state': 'standby',
+                          'requested_models': ['pinned-model'], 'hosted_models': [],
+                          'runtime': {'intent_summary': {'recent_errors': ['Xet download failed: connection error']}}}
+                response = MagicMock()
+                response.__enter__.return_value.read.side_effect = [
+                    json.dumps(status).encode(),
+                    json.dumps({**status, 'node_id': ('c' if changed_identity else 'a') * 10}).encode(),
+                    json.dumps(status).encode()]
+                opener = Mock(); opener.open.return_value = response
+                output = io.StringIO()
+                with patch.object(target.common, 'ROOT', root), \
+                     patch.object(target.os, 'geteuid', return_value=target.common.UID), \
+                     patch.dict(target.os.environ, {'SSH_ORIGINAL_COMMAND': 'join-v0'}), \
+                     patch.object(target.signal, 'alarm'), patch.object(target.signal, 'signal'), \
+                     patch.object(target.sys, 'stdin', type('Input', (), {'buffer': io.BytesIO(self.frame())})()), \
+                     patch.object(target.sys, 'stdout', output), \
+                     patch.object(target.subprocess, 'Popen', side_effect=[first, second]) as spawn, \
+                     patch.object(target.urllib.request, 'build_opener', return_value=opener), \
+                     patch.object(target.time, 'monotonic', side_effect=[0, 1, 2, 3, 4, 5, 61]), \
+                     patch.object(target.time, 'sleep'), patch.object(target.os, 'killpg') as kill, \
+                     patch.object(target.token_status, 'snapshot'):
+                    if changed_identity:
+                        with self.assertRaises(RuntimeError): target.receive()
+                    else:
+                        target.receive()
+                self.assertEqual(spawn.call_count, 2)
+                self.assertEqual(spawn.call_args_list[0], spawn.call_args_list[1])
+                self.assertEqual(spawn.call_args.kwargs['env']['MESH_LLM_NODE_KEY_PATH'], str(root / 'node.key'))
+                self.assertEqual([c.args[0] for c in kill.call_args_list], [456, 456, 457, 457])
+                self.assertEqual(len(output.getvalue().splitlines()), 1)
+                self.assertFalse((root / 'join-token').exists())
+
+    def test_non_download_and_resource_errors_do_not_trigger_recovery(self):
+        for error in ('CUDA load failed', 'download forbidden 403', 'download: no space left',
+                      'download out of memory', 'unknown failure'):
+            status = {'requested_models': ['model'], 'hosted_models': [], 'node_state': 'standby',
+                      'runtime': {'intent_summary': {'recent_errors': [error]}}}
+            self.assertFalse(target.recoverable_download(status))
+        self.assertFalse(target.recoverable_download(None))
+
     def test_consumed_provisioning_is_not_replayed(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);(root/'provision-consumed').write_text('used')

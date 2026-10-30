@@ -292,6 +292,7 @@ fn worker_observation(
     let mut result = json!({"phase":phase,"observed_at":value["observed_at"]});
     for key in [
         "elapsed_seconds",
+        "download_restart_count",
         "cache_file_bytes",
         "cache_allocated_bytes",
         "cache_file_count",
@@ -317,6 +318,14 @@ fn worker_observation(
         "mesh_matches",
         "cache_scan_truncated",
         "runtime_snapshot_truncated",
+        "runtime_error_download",
+        "runtime_error_timeout",
+        "runtime_error_connection",
+        "runtime_error_auth",
+        "runtime_error_rate_limit",
+        "runtime_error_disk",
+        "runtime_error_memory",
+        "runtime_error_native",
         "node_loading",
         "node_serving",
     ] {
@@ -488,12 +497,14 @@ mod tests {
     use super::*;
     #[test]
     fn observations_are_fresh_resource_bound_and_not_readiness() {
-        let value = json!({"schema":"m8s.token-observation/v0","image":"image","instance_id":7,"observed_at":100,"worker":{"schema":"m8s.token-worker-status/v0","phase":"starting","worker_running":true,"cache_file_bytes":123,"runtime_error_count":2,"recent_errors":["private-error"],"join_token":"private-token","ready":true}});
+        let value = json!({"schema":"m8s.token-observation/v0","image":"image","instance_id":7,"observed_at":100,"worker":{"schema":"m8s.token-worker-status/v0","phase":"starting","worker_running":true,"cache_file_bytes":123,"runtime_error_count":2,"runtime_error_download":true,"runtime_error_timeout":"private-token","recent_errors":["private-error"],"join_token":"private-token","ready":true}});
         let node = json!({"instance_id":7});
         let plan = json!({"image":"image"});
         let observed = worker_observation(Some(&value), Some(&node), &plan, 110).unwrap();
         assert_eq!(observed["cache_file_bytes"], 123);
         assert_eq!(observed["runtime_error_count"], 2);
+        assert_eq!(observed["runtime_error_download"], true);
+        assert!(observed.get("runtime_error_timeout").is_none());
         assert!(observed.get("ready").is_none());
         assert!(!observed.to_string().contains("private"));
         for (field, changed) in [

@@ -4,10 +4,12 @@ use serde_json::json;
 fn worker_status_projection_never_relays_remote_strings_or_readiness_claims() {
     let value = json!({"schema":"m8s.token-worker-status/v0","phase":"starting",
         "elapsed_seconds":7,"worker_running":true,"worker_exit_code":-15,
-        "runtime_error_count":2,"node_loading":true,"recent_errors":["private-error"],"cache_file_bytes":"private-token","stderr":"private-log","join_token":"private-invite",
+        "runtime_error_count":2,"runtime_error_download":true,"runtime_error_timeout":"private-token","node_loading":true,"recent_errors":["private-error"],"cache_file_bytes":"private-token","stderr":"private-log","join_token":"private-invite",
         "ready":true,"certificate_verified":true});
     let projected = project_token_status(&value).unwrap();
     assert_eq!(projected["runtime_error_count"], 2);
+    assert_eq!(projected["runtime_error_download"], true);
+    assert!(projected.get("runtime_error_timeout").is_none());
     assert_eq!(projected["node_loading"], true);
     assert_eq!(projected["elapsed_seconds"], 7);
     assert_eq!(projected["worker_exit_code"], -15);

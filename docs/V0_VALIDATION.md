@@ -302,3 +302,23 @@ and deadline checks passed. The new image is
 anonymous digest access passed with cached layers. Its stock product is unchanged,
 but this new diagnostic image has not been rented or live-qualified. It does not
 fix or identify the live transfer stall by itself.
+
+
+## Bounded download recovery checkpoint
+
+A further live run using stock main on both ends joined the selected mesh but
+reported one runtime error after about 7.10 GB of cache growth. Removal and a
+separate complete empty inventory check passed. No canary or conversation passed.
+An isolated real-model download on macOS reproduced an Xet response-body decode
+failure; a second invocation resumed the partial cache and completed the pinned
+16,464,440,224-byte file. See the transfer investigation for qualification limits.
+
+The worker now permits one supervised restart for a failed download, preserving
+its explicit node identity, partial cache and original deadline. Tests cover a
+second failure without a third process, changed-identity refusal, process-group
+reaping, private-token erasure, and non-download/resource-error refusal. Raw error
+text stays private; only fixed boolean keyword hints and a restart count pass
+through the provider/plugin boundary. The app identifies that one recovery was
+attempted without claiming inference success.
+The immutable image in `stock-image.json` passed SSH refusal, cancellation,
+deadline and anonymous digest-pull checks. Live recovery/inference is still pending.

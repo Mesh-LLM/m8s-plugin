@@ -66,7 +66,9 @@ acknowledgement is not admission or inference proof. The live acceptance gates
 and independent exact-resource cleanup remain in the [v0 runbook](../../docs/V0_TOKEN_JOIN.md).
 
 The worker limits inference to one slot, a 4096-token context and no draft model.
-It requests zero Hub/Xet retries. Reproduce the synthetic Xet failure checks
+It requests zero Hub/Xet request retries. A reported download failure may restart
+the same stock worker once with its partial cache, unchanged identity and original
+deadline; this remains within the two-path transfer reserve. Reproduce the synthetic Xet failure checks
 against an already built stock binary with:
 
 ```sh

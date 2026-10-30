@@ -121,3 +121,14 @@ checks. Metadata fallback resolvers can still retry; these settings are not a
 global no-retry guarantee. Complete image size and real model transfer accounting
 still require qualification before a paid launch plan. See the validation
 checkpoint for the exact scope.
+
+
+### Bounded model-download recovery
+
+A failed download may restart the stock worker process once, using its same
+explicit node-key path and partial cache. This does not create another rental,
+replay provisioning or reset the worker/owner deadline. The supervisor reaps the
+old process group and refuses an identity change after restart. Request-level
+Hub/Xet retries remain disabled; the transfer reserve includes two full model
+paths. See the [investigation](issues/stock-model-transfer-stall.md) for the local
+reproduction and limits of current evidence. Recovery is not inference acceptance.

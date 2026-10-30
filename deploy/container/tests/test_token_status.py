@@ -46,6 +46,20 @@ class TokenStatusTests(unittest.TestCase):
         projected = status.project({'schema': status.SCHEMA, 'phase': 'joined', **result})
         self.assertEqual(projected['runtime_error_count'], 256)
 
+    def test_error_hints_are_bounded_keywords_not_raw_error_messages(self):
+        errors = ['Download failed: CAS request connection timed out at https://private/?token=secret',
+                  '403 forbidden', '429 rate limited', 'No space left on device',
+                  'CUDA allocation failed', {'private': 'out of memory'}]
+        result = status.runtime_metrics({'runtime': {'intent_summary': {'recent_errors': errors}}})
+        self.assertTrue(all(result[key] for key in status.ERROR_HINTS))
+        projected = status.project({'schema': status.SCHEMA, 'phase': 'joined', **result,
+                                    'runtime_error_unknown': 'private-token'})
+        self.assertNotIn('secret', json.dumps(projected))
+        self.assertNotIn('private', json.dumps(projected))
+        self.assertNotIn('runtime_error_unknown', projected)
+        distant = status.runtime_metrics({'runtime': {'intent_summary': {'recent_errors': ['x' * 4096 + 'timeout']}}})
+        self.assertFalse(distant['runtime_error_timeout'])
+
     def test_private_atomic_snapshot_and_file_refusals(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

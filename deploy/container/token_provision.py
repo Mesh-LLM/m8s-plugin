@@ -46,6 +46,53 @@ def command(config):
             '--console', '3131', '--no-draft', '--ctx-size', '4096', '--parallel', '1', '--bind-ip', '0.0.0.0', '--bind-port', '40100']
 
 
+def start_worker(config):
+    return subprocess.Popen(command(config), stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 start_new_session=True,
+                                 env={'PATH': '/usr/local/nvidia/bin:/usr/bin:/bin',
+                                      'LD_LIBRARY_PATH': '/usr/local/nvidia/lib64:/usr/local/nvidia/lib',
+                                      'HOME': str(common.ROOT),
+                                      'MESH_LLM_NODE_KEY_PATH': str(common.ROOT / 'node.key'),
+                                      'MESH_LLM_NATIVE_RUNTIME_BUNDLE_DIR': '/opt/mesh/native-runtimes',
+                                      'MESH_LLM_NO_DEFAULT_PLUGINS': '1',
+                                      'HF_HUB_DISABLE_IMPLICIT_TOKEN': 'true',
+                                      'HF_HUB_CACHE': str(common.ROOT / 'hf-cache'),
+                                      'MESH_HF_RETRY_MAX_ATTEMPTS': '0',
+                                      'HF_XET_CLIENT_RETRY_MAX_ATTEMPTS': '0',
+                                      'MESH_LLM_ANALYTICS': '0', 'DO_NOT_TRACK': '1'})
+
+
+def stop_worker(child):
+    # Reap the whole owned session before reuse or exit, including descendants.
+    try:
+        os.killpg(child.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        child.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        pass
+    finally:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        child.wait()
+
+
+def recoverable_download(status):
+    metrics = token_status.runtime_metrics(status)
+    return (metrics.get('runtime_error_download') is True
+            and metrics.get('hosted_model_count') == 0
+            and metrics.get('requested_model_count') == 1
+            and metrics.get('node_loading') is False
+            and metrics.get('node_serving') is False
+            and not any(metrics.get(key) for key in (
+                'runtime_error_auth', 'runtime_error_disk',
+                'runtime_error_memory', 'runtime_error_native')))
+
+
 def receive():
     if os.environ.get('SSH_ORIGINAL_COMMAND') == 'status-v0':
         common.require(os.geteuid() == common.UID)
@@ -72,20 +119,10 @@ def receive():
     signal.signal(signal.SIGHUP, stop)
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     announced = False
+    announced_node = None
+    download_restarts = 0
     try:
-        child = subprocess.Popen(command(config), stdin=subprocess.DEVNULL,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                 start_new_session=True,
-                                 env={'PATH': '/usr/local/nvidia/bin:/usr/bin:/bin',
-                                      'LD_LIBRARY_PATH': '/usr/local/nvidia/lib64:/usr/local/nvidia/lib',
-                                      'HOME': str(common.ROOT),
-                                      'MESH_LLM_NATIVE_RUNTIME_BUNDLE_DIR': '/opt/mesh/native-runtimes',
-                                      'MESH_LLM_NO_DEFAULT_PLUGINS': '1',
-                                      'HF_HUB_DISABLE_IMPLICIT_TOKEN': 'true',
-                                      'HF_HUB_CACHE': str(common.ROOT / 'hf-cache'),
-                                      'MESH_HF_RETRY_MAX_ATTEMPTS': '0',
-                                      'HF_XET_CLIENT_RETRY_MAX_ATTEMPTS': '0',
-                                      'MESH_LLM_ANALYTICS': '0', 'DO_NOT_TRACK': '1'})
+        child = start_worker(config)
         token_status.snapshot(common.ROOT, 'starting', 0, child)
         while child.poll() is None:
             observed = time.monotonic()
@@ -110,35 +147,35 @@ def receive():
                         print(json.dumps({'schema': 'm8s.token-worker/v0', 'node_id': node,
                                           'mesh_id': config['mesh_id'], 'certificate_verified': False}), flush=True)
                         announced = True
+                        announced_node = node
+                    elif node != announced_node:
+                        raise RuntimeError('Worker identity changed during recovery')
                 except (ValueError, OSError):
                     pass  # Admission/readiness remains unconfirmed; never weaken policy.
                 phase = 'joined' if identity_ready else ('waiting_for_mesh' if api_reachable else 'starting')
-                token_status.snapshot(common.ROOT, phase, observed - started, child, api_reachable, mesh_matches, status)
+                token_status.snapshot(common.ROOT, phase, observed - started, child, api_reachable, mesh_matches, status, download_restarts)
                 last_snapshot = observed
+                # Retry only a failed download, once, without rebasing the deadline.
+                # Stock Mesh resumes the same private partial cache on restart.
+                if (identity_ready and download_restarts == 0
+                        and deadline - time.monotonic() > 30
+                        and recoverable_download(status)):
+                    download_restarts += 1
+                    stop_worker(child)
+                    child = None
+                    if time.monotonic() >= deadline:
+                        break
+                    child = start_worker(config)
+
             time.sleep(0.25)
     finally:
         try:
             if child is not None:
-                # A host exit may leave children in its session. Always stop
-                # the group, even when poll() has already reaped the host.
-                try:
-                    os.killpg(child.pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-                try:
-                    child.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    pass
-                finally:
-                    try:
-                        os.killpg(child.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    child.wait()
+                stop_worker(child)
         finally:
             (common.ROOT / 'join-token').unlink(missing_ok=True)
             try:
-                token_status.snapshot(common.ROOT, 'stopped', observed - started, child)
+                token_status.snapshot(common.ROOT, 'stopped', observed - started, child, download_restarts=download_restarts)
             except OSError:
                 pass  # Observability cannot prevent teardown or token erasure.
     common.require(announced)

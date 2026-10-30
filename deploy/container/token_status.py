@@ -6,12 +6,23 @@ import stat
 
 SCHEMA = 'm8s.token-worker-status/v0'
 PHASES = {'awaiting_join', 'unknown', 'starting', 'waiting_for_mesh', 'joined', 'stopped'}
-COUNTERS = {'elapsed_seconds', 'cache_file_bytes', 'cache_allocated_bytes',
+COUNTERS = {'download_restart_count', 'elapsed_seconds', 'cache_file_bytes', 'cache_allocated_bytes',
             'cache_file_count', 'cache_incomplete_files', 'worker_rss_bytes',
             'worker_read_bytes', 'worker_write_bytes', 'network_received_bytes',
             'network_sent_bytes', 'requested_model_count', 'hosted_model_count',
             'runtime_model_count', 'runtime_instance_count', 'runtime_error_count'}
-FLAGS = {'worker_running', 'api_reachable', 'mesh_matches', 'cache_scan_truncated',
+# Heuristic keyword matches, never raw errors or admission/readiness evidence.
+ERROR_HINTS = {
+    'runtime_error_download': ('download', 'reconstruction', 'cas request', 'xet'),
+    'runtime_error_timeout': ('timeout', 'timed out'),
+    'runtime_error_connection': ('connection', 'connect error', 'dns', 'broken pipe'),
+    'runtime_error_auth': ('unauthorized', 'forbidden', '401', '403'),
+    'runtime_error_rate_limit': ('rate limit', '429'),
+    'runtime_error_disk': ('no space left', 'disk quota', 'os error 28'),
+    'runtime_error_memory': ('out of memory', 'allocation failed'),
+    'runtime_error_native': ('cuda', 'native runtime', 'abi mismatch', 'shared librar'),
+}
+FLAGS = set(ERROR_HINTS) | {'worker_running', 'api_reachable', 'mesh_matches', 'cache_scan_truncated',
          'runtime_snapshot_truncated', 'node_loading', 'node_serving'}
 
 
@@ -52,6 +63,11 @@ def runtime_metrics(status):
         if type(value) is list:
             truncated |= len(value) > 256
             result[key] = sum(type(item) is expected and bool(item) for item in value[:256])
+    errors = summary.get('recent_errors')
+    if type(errors) is list:
+        texts = [e[:4096].lower() for e in errors[:256] if type(e) is str]
+        for key, patterns in ERROR_HINTS.items():
+            result[key] = any(pattern in text for text in texts for pattern in patterns)
     if result:
         result['runtime_snapshot_truncated'] = truncated
     if status.get('node_state') in ('client', 'standby', 'loading', 'serving', 'worker'):
@@ -159,8 +175,8 @@ def network_metrics():
     return result
 
 
-def snapshot(root, phase, elapsed, child, api_reachable=False, mesh_matches=False, runtime=None):
-    value = {'schema': SCHEMA, 'phase': phase, 'elapsed_seconds': max(0, int(elapsed)),
+def snapshot(root, phase, elapsed, child, api_reachable=False, mesh_matches=False, runtime=None, download_restarts=0):
+    value = {'schema': SCHEMA, 'phase': phase, 'download_restart_count': download_restarts, 'elapsed_seconds': max(0, int(elapsed)),
              'worker_running': phase != 'stopped' and child is not None and child.poll() is None,
              'api_reachable': api_reachable, 'mesh_matches': mesh_matches}
     if child is not None:

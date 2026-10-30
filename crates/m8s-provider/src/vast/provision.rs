@@ -278,6 +278,7 @@ fn project_token_status(value: &Value) -> Result<Value> {
     let mut result = serde_json::json!({"schema":"m8s.token-worker-status/v0","phase":phase});
     for key in [
         "elapsed_seconds",
+        "download_restart_count",
         "cache_file_bytes",
         "cache_allocated_bytes",
         "cache_file_count",
@@ -303,6 +304,14 @@ fn project_token_status(value: &Value) -> Result<Value> {
         "mesh_matches",
         "cache_scan_truncated",
         "runtime_snapshot_truncated",
+        "runtime_error_download",
+        "runtime_error_timeout",
+        "runtime_error_connection",
+        "runtime_error_auth",
+        "runtime_error_rate_limit",
+        "runtime_error_disk",
+        "runtime_error_memory",
+        "runtime_error_native",
         "node_loading",
         "node_serving",
     ] {
