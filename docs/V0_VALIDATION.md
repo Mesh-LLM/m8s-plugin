@@ -71,13 +71,14 @@ Stock GPU inference and the replacement desktop recording remain unverified.
 
 ## Still required
 
-1. Build and qualify a matching stock-main Linux CUDA/SM120 product and its
-   immutable worker image, including native download transfer bounds. The
+1. Publish the locally checked stock-main Linux CUDA/SM120 worker and verify
+   anonymous access to its immutable digest. Registry upload is currently blocked
+   by missing GitHub package-writing scope. The
    downloaded official v0.78.1 product has ABI 0.1.66; main requires 0.1.74.
    Its source is outside the checked main ancestry. Do not edit metadata to
    force acceptance or substitute the historical private fork.
-2. Verify the exact image's admission failure, host-key failure, cancellation,
-   bounded shutdown and provider cleanup behavior.
+2. Complete remote admission/inference and provider cleanup qualification. Local
+   image SSH refusal, cancellation and bounded shutdown checks passed as below.
 3. Run one freshly authorized bounded rental through the shared plugin/app
    workflow, complete inference through the selected mesh and a real app
    conversation, then independently confirm exact-resource destruction.
@@ -106,8 +107,36 @@ by the unchanged packaging recipe. No source or dependency-policy patch is
 applied. The NCCL-free native runtime packaged successfully with ABI `0.1.74`;
 the upstream archive verifier passed for CUDA/x86_64, and the manifest records
 SM120 support. The unchanged upstream release-host recipe also completed,
-including its console build. Product archive creation and exact worker-image
-qualification are still pending. The worker retains only fixed NVIDIA driver
+including its console build and product archive creation. The complete product
+manifest agrees on ABI `0.1.74`; host, runtime manifest and runtime file hashes
+were checked. The archive is 803,922,519 bytes compressed and 1,268,733,464 bytes
+expanded. The local AMD64 worker image is 2,982,352,801 bytes and reports stock
+Mesh `0.78.0`; its dynamic host libraries resolve. Registry publication and GPU
+qualification remain pending. The worker retains only fixed NVIDIA driver
 search paths in its otherwise isolated environment; it does not inherit the
 provider instance secret.
 Raw logs, identities, captures and accounting evidence remain private.
+
+## Exact-image local checks
+
+Checked local image ID:
+`sha256:3c5db0989a38dd3e634d181d8610c61bfc09f6af997aee5adfc37ce96365f790`.
+It is not yet an anonymously available registry reference. Its input product
+archive SHA-256 is
+`6ec6f1e1c763ee49731fba1910878018c15e5b1ed7295ccf4634c5d8177150b1`.
+
+`deploy/container/qualify_stock_ssh.py` exercises the actual image on a Docker
+internal network. Its SSH client is another container on that isolated network;
+no public port or provider access is needed. Wrong host pin, unsupported command
+and replay were refused. A bounded worker failure erased its join file and left
+no worker process. With a valid ephemeral local invite, the harness observed the
+worker running, then verified supervisor-signal cancellation and a five-second
+lifetime configuration. Both stopped the worker and erased the invite. Test
+containers, networks and temporary client keys were removed.
+
+The process check recognizes the executable among arguments, including an AMD64
+emulation wrapper on an ARM host. An earlier first-argument-only check missed the
+wrapped process; the corrected checks were rerun successfully. These checks are
+not proof of GPU execution, admission to the selected live mesh, or destruction
+of a billable provider instance. Registry authentication failures created no
+rental and consumed none of the separately authorized live budget.

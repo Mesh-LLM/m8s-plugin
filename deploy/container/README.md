@@ -113,3 +113,20 @@ python3 -B -m unittest discover -s deploy/container/tests -v
 
 These use synthetic files, archives and fake programs; they make no provider
 calls and do not establish real GPU inference or provider cleanup.
+
+## Local SSH qualification
+
+After building the worker, test its exact local image ID or immutable digest:
+
+```sh
+python3 deploy/container/qualify_stock_ssh.py "$EXACT_IMAGE"
+python3 deploy/container/qualify_stock_ssh.py "$EXACT_IMAGE" cancel "$EPHEMERAL_TARGET"
+python3 deploy/container/qualify_stock_ssh.py "$EXACT_IMAGE" deadline "$EPHEMERAL_TARGET"
+```
+
+The latter checks accept a private token-target JSON file for a disposable local
+mesh, not a production invite. They observe the worker before checking shutdown.
+The harness runs server and SSH client on an internal Docker network, uses only
+synthetic instance credentials, and removes its containers, network and temporary
+client key. Private diagnostic output stays in a newly created temporary directory.
+These checks do not rent hardware or establish GPU/provider-cleanup acceptance.
