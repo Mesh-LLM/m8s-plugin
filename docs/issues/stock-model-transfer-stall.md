@@ -1,6 +1,7 @@
 # Stock-main model transfer stalls after partial cache growth
 
-Status: open; no successful stock-GPU inference or replacement demo.
+Status: bounded recovery verified in a live stock-GPU run; upstream transfer
+failure cause remains open. Final inventory check and showcase publication pending.
 
 With stock main 280944334 on both the app-owned passive client and remote worker,
 token-only attachment succeeded. The owner observed the intended remote peer and
@@ -71,3 +72,10 @@ group, retains the explicit node-key path and cache, verifies unchanged identity
 and preserves the original deadline and single provisioning claim. Hub/Xet
 request retries remain zero. The 64 GB transfer reserve already covers two full
 model paths and the image. Remote inference still requires live verification.
+
+
+Live recovery result: the next rental used the single restart, completed the
+model download, served the owner-routed canary and both app chat turns, and was
+removed with controller and watchdog absence receipts. The separate final account
+inventory check is pending. This verifies the mitigation for this run; it does
+not establish the underlying cause of every Xet response-body decode failure.

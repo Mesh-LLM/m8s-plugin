@@ -7,7 +7,9 @@ credit until exhausted, with no top-ups. Earlier $6/$0.21 figures below are
 historical checkpoints, not current spending limits or approval requirements.
 Preserve the underlying journals and reconcile actual billing; do not double-count
 charges already deducted from provider credit. See `AGENTS.md`.
-Stock GPU inference and the replacement desktop recording remain unverified.
+A new live capture passed stock GPU inference and two app chat turns. Its controller
+and watchdog confirmed provider absence; the separate final inventory check and
+reviewed showcase publication remain pending.
 
 ## Verified locally
 
@@ -322,3 +324,26 @@ through the provider/plugin boundary. The app identifies that one recovery was
 attempted without claiming inference success.
 The immutable image in `stock-image.json` passed SSH refusal, cancellation,
 deadline and anonymous digest-pull checks. Live recovery/inference is still pending.
+
+
+## Successful capture, final inventory/publication pending
+
+The qualified recovery image completed a real selected-mesh run with stock main
+`280944334` on both the passive app-owned client and rented worker. One supervised
+process restart resumed the partial download. The worker retained its identity,
+joined the selected mesh, reported one hosted model, and served the owner-routed
+canary. Two subsequent chat turns in the actual app completed. The pinned model
+was Qwen 3.8 27B UD-Q4_K_M; the image is the immutable digest in `stock-image.json`.
+
+The app requested removal, the controller recorded provider-confirmed absence,
+and its independent watchdog also recorded absence. A separate full account
+inventory check has not yet run because macOS locked before the network command.
+Do not call the publication/review gate complete until that check and media review
+finish. The successful raw capture and receipts remain privately preserved;
+operational identifiers and credentials are not source artifacts. Admission was
+`token-only-provider-trusted`, with `certificate_verified: false` throughout.
+
+The recorded UI briefly retained stale peer hardware after provider-confirmed
+removal. The edit must disclose that discovery lag rather than invent a refreshed
+fleet state. The recording does not demonstrate live GPU utilization, owner
+certificate issuance, repeated bookings or multiple concurrent rentals.
