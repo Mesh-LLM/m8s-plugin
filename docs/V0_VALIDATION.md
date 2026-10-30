@@ -17,8 +17,8 @@ Stock GPU inference and the replacement desktop recording remain unverified.
   unconsumed attempt bound to the selected mesh. Main's 32-character mesh IDs
   are accepted. The smoke test made no provider calls, created no rentals and
   confirmed its isolated host stopped afterward.
-- The root filtered suite passed (seven PTY/ACL tests excluded), followed by
-  focused checks for the final token changes and strict workspace Clippy.
+- The full root `scripts/check` passed, including the seven synthetic PTY/ACL
+  tests previously excluded. Formatting and strict workspace Clippy passed too.
   The plugin's four tests and strict Clippy passed; 44 container tests passed, including interruption/denial cleanup and
   refusal to replay consumed provisioning and process-group cleanup after the
   host exits before its children.
@@ -78,6 +78,10 @@ mesh, the main node joined through its token, each observed one peer, and the ap
 returned token-only status through the real shared plugin adapter. Both processes
 stopped afterward, with no provider calls or rentals. This establishes local
 admission and adapter interoperability, not GPU inference or the live demo.
+A second check passed with an unsigned stock-main node, matching the remote
+worker configuration: it joined without an owner certificate, both peers observed
+each other, and both processes stopped. This confirms the weaker token-only
+admission behavior locally; it does not establish ownership certification.
 
 The first Linux CUDA build completed native compilation but failed during
 packaging because its builder lacked `patchelf`. The repaired builder includes
