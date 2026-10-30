@@ -10,10 +10,10 @@ const [binary, scenario = "payload"] = process.argv.slice(2);
 if (
   !binary ||
   !path.isAbsolute(binary) ||
-  !["cas", "payload"].includes(scenario)
+  !["cas", "payload", "stall"].includes(scenario)
 ) {
   throw Error(
-    "Usage: node qualify_stock_download.mjs /absolute/mesh-llm [cas|payload]",
+    "Usage: node qualify_stock_download.mjs /absolute/mesh-llm [cas|payload|stall]",
   );
 }
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "m8s-stock-download-"));
@@ -92,6 +92,10 @@ const server = http.createServer((req, res) => {
       res.writeHead(416);
       res.end();
     }
+  } else if (req.url === "/payload" && scenario === "stall") {
+    // A connected server sends headers and one byte, then never finishes.
+    res.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Length": "1024" });
+    res.write(Buffer.from([0]));
   } else {
     res.writeHead(req.url === "/payload" ? 503 : 404, {
       "Content-Type": "application/json",
@@ -125,6 +129,7 @@ const timer = setTimeout(() => {
 }, 20000);
 const code = await new Promise((r) => child.on("exit", r));
 clearTimeout(timer);
+server.closeAllConnections();
 server.close();
 await log.close();
 const selected = requests.filter((r) =>
@@ -140,14 +145,13 @@ const result = {
   code,
   timedOut,
   passed:
-    code !== null &&
-    code !== 0 &&
-    !timedOut &&
+    (scenario === "stall" ? timedOut && code === null : code !== null && code !== 0 && !timedOut) &&
     selected.length > 0 &&
     Object.values(selectedCounts).every((n) => n === 1),
   selected_request_counts: selectedCounts,
-  scope:
-    "Synthetic HTTP 503 failure; no real weights, provider calls or GPU inference. Only the selected Xet failure requests are counted; metadata fallback behavior is outside this assertion.",
+  scope: scenario === "stall"
+    ? "Synthetic stalled response: observes whether the stock download remains pending until the harness kills it at 20 seconds. No provider calls, real weights or GPU inference; not a diagnosis of a particular live failure."
+    : "Synthetic HTTP 503 failure; no real weights, provider calls or GPU inference. Only the selected Xet failure requests are counted; metadata fallback behavior is outside this assertion.",
 };
 await fs.writeFile(root + "/result.json", JSON.stringify(result, null, 2), {
   mode: 0o600,

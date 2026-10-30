@@ -235,3 +235,36 @@ mesh IDs and one peer on each side, working plugin status, no duplicate-relay
 registration error, and confirmed shutdown of the owned stock process. It made
 no provider calls and created no rental. The reproducible harness is the app's
 `scripts/check-stock-node.mjs`. Remote qualification is still outstanding.
+
+
+## Stock-main owner: remote attachment verified, model transfer stalled
+
+The third paid attempt used the app-owned stock-main passive client and the
+unchanged diagnostic worker image. Host-key-pinned provisioning passed; the
+worker acknowledged the selected mesh and the owner observed exactly one remote
+peer with one GPU. No duplicate-relay eviction appeared in this profile. This
+establishes remote token-only attachment, not owner-certified admission.
+
+The cache grew to 5,579,017,927 bytes, then stayed unchanged for approximately
+eight minutes with one incomplete file. The worker stayed alive, its API remained
+reachable, and the peer advertised one requested model but no hosted model.
+No canary or chat completed. The evidence does not identify a particular Hub,
+CAS, transport or runtime error; see [the open transfer issue](issues/stock-model-transfer-stall.md).
+
+Remove compute stopped the attempt early. Exact absence and an independent full
+empty instance/volume inventory passed; the temporary provisioning/invite/owner
+keys were removed and the failed capture preserved privately. The new retained
+reservation is 1,865,187 micro-USD. Across all three attempts, uncertain liability
+is 5,788,895 micro-USD, leaving 211,105 under the 6,000,000 authorization. These
+are reservations, not settled charges. There is no active rental, and the
+remaining allowance cannot cover another attempt's required contingency.
+
+The new local regression harness also passed from its committed entry point:
+verified stock-main local ownership, mutual peer discovery, plugin status,
+no duplicate-relay registration and owned-child shutdown, without provider calls.
+The replacement demo remains blocked on successful real inference and chat.
+
+
+A local connected-response stall probe made one payload request and remained
+pending until its external 20-second cancellation. Retry controls did not create
+a progress deadline. This synthetic result is not attribution of the live stall.

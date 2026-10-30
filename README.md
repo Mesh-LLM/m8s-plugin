@@ -6,7 +6,7 @@ Bounded rented compute for Mesh. **Stock-Mesh v0 is under development and has no
 passed end-to-end live acceptance.** Do not treat the historical Qwen demo as
 proof of this workflow: it used a private runtime fork.
 
-The proposed v0 sends a join token through host-key-verified SSH to stock Mesh
+The experimental v0 sends a join token through host-key-verified SSH to stock Mesh
 `--join-file`. A token supplies connection information, **not an owner-issued
 worker certificate**. Use a mesh whose admission policy permits the worker and
 whose operator accepts the provider's access to worker memory and inference data.
@@ -44,14 +44,17 @@ paths or policy overrides. See [the v0 runbook and acceptance gates](docs/V0_TOK
 
 Package/install the Mesh plugin using [plugin/README.md](plugin/README.md).
 For the desktop adapter, set `M8S_PLUGIN` to the plugin executable and provide the
-same controller/plan environment. Neither adapter creates a funding authorization.
+same controller/plan environment. For the qualified stock-main local-node path,
+also set `M8S_STOCK_MESH` to the stock executable; see the app runbook. Neither
+adapter creates a funding authorization.
 
 ## Evidence and scope
 
 The plugin SDK is pinned to upstream main commit
 `2809443345ea8134db62a8b433f5bb2bb5f1d123`. The real host handshake and MCP status call passed; see
-[the validation checkpoint](docs/V0_VALIDATION.md). A worker image and full rental
-flow have not been qualified against that commit.
+[the validation checkpoint](docs/V0_VALIDATION.md). The stock worker product and
+remote token-only attachment passed. Model transfer stalled before inference,
+so the full rental/chat flow and replacement demo remain unverified.
 The published `v0.78.1` release commit is not an ancestor of this checked main tip;
 its downloaded artifacts are not being relabeled as a main build.
 
