@@ -131,6 +131,15 @@ class Release(unittest.TestCase):
         problems = R.audit_dockerfiles(d)
         self.assertEqual(len(problems), 3)
 
+    def test_empty_export_stage_is_not_an_unpinned_registry_image(self):
+        d = self.root / 'exports'
+        d.mkdir()
+        path = d / 'Dockerfile.product'
+        path.write_text('FROM scratch AS product\n')
+        self.assertEqual(R.audit_dockerfiles(d), [])
+        path.write_text('FROM scratch:latest\n')
+        self.assertEqual(len(R.audit_dockerfiles(d)), 1)
+
     def test_source_archive_is_reproducible(self):
         repo = self.root / 'repo'
         repo.mkdir()

@@ -32,5 +32,5 @@ The desktop SDK and remote runtime can expose different exact public model IDs.
 Discovery permits the pinned HF alias or its pinned native source identity, then
 sends the observed ID for the single canary request. Response validation still
 requires the pinned native source identity. See the sanitized
-[current-mesh receipt](../../deploy/container/current-mesh-validation.json) for
+[current-mesh receipt](../HISTORICAL_EVIDENCE.md) for
 live attachment/removal evidence and the canary qualification status.

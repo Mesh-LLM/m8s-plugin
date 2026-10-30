@@ -1,5 +1,24 @@
 # m8s development
 
+## Current standing funding authorization (supersedes earlier session caps)
+
+The user authorizes using the existing funded Vast account credit until it is
+exhausted to finish m8s v0 verification and the app demo. The provider's current
+available credit is the funding limit; the old $6 session cap and requests for
+another $6 are superseded. Do not ask again for per-attempt funding while an
+attempt fits the remaining funded credit. No top-ups, new payment methods or
+spending beyond that credit are authorized. The selected credential file remains
+the workspace `.env` (VAST_API_KEY); never print its value.
+
+Before each paid attempt, observe fresh credit/prices and complete empty instance
+and volume inventories. Run at most one rental, bound its full liability within
+available funded credit, and arm automatic exact-resource cleanup before CREATE.
+Keep historical claims and accounting evidence. Distinguish old conservative
+reservations from settled charges already deducted from provider credit: do not
+subtract the same charge twice or treat the obsolete session cap as authority.
+Reconcile genuine outstanding/unbilled liabilities conservatively. A per-attempt
+implementation ceiling is a safety bound, not a new permission requirement.
+
 ## Session scope
 Use the current user's instructions to determine source, provider and publication
 scope. Earlier session restrictions and demo budgets are historical, not standing
@@ -17,7 +36,7 @@ and synthetic fixtures.
 - Keep secret values out of Debug, Serialize, argv, logs, fixtures and the repository.
 - Launch intent precedes effects; uncertainty is not absence; stopped is not destroyed.
 - Delete instance rows only after explicit provider-confirmed absence. Scope orphan cleanup by exact owner.
-- Do not advertise Ready without certificate verification, served model and owner-routed canary.
+- Certified mode requires certificate verification, served model and owner-routed canary. Explicit token-only v0 may report only token-mode inference verification after its separate gates; never imply owner certification.
 - Do not weaken iroh bootstrap/control to plaintext transport. Unimplemented security paths fail closed.
 - Run scripts/check (fmt, tests, clippy); max two compiler jobs. Coordinate heavy builds.
 - Only integration owner edits root Cargo.toml/Cargo.lock. Workers do not delegate.

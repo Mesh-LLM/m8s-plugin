@@ -16,3 +16,19 @@ __pycache__/
 *.pyc
 
 /plugin/target/
+
+# Operator runs and recordings are private, never release inputs.
+/recordings/
+/evidence/
+/runs/
+/operational/
+/deploy/container/*-evidence.json
+/deploy/container/*-proof.json
+/deploy/container/*-qualification.json
+/deploy/container/*-authorization.json
+/deploy/container/*-reconciliation*.json
+/deploy/container/*-attempt*.json
+/deploy/container/*-validation.json
+/deploy/container/*-proposal.json
+/deploy/container/*-cancellation.json
+/deploy/container/stock-product.tar.gz

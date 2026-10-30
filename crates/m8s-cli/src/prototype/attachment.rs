@@ -24,6 +24,7 @@ pub(super) struct Attached {
 }
 pub(super) enum Client {
     Dedicated(OwnerClient),
+    Token(super::token_join::TokenClient),
     Attached(Attached),
 }
 impl Bridge {
@@ -125,25 +126,28 @@ impl Client {
     pub async fn invite(&mut self) -> Result<Zeroizing<Vec<u8>>> {
         match self {
             Self::Dedicated(client) => client.invite().await,
+            Self::Token(client) => tokio::task::block_in_place(|| client.invite()),
             Self::Attached(client) => tokio::task::block_in_place(|| client.invite()),
         }
     }
     pub fn port(&self) -> u16 {
         match self {
             Self::Dedicated(client) => client.port,
+            Self::Token(client) => client.port(),
             Self::Attached(client) => client.port,
         }
     }
     pub fn desktop_attachment(&self) -> Value {
         match self {
             Self::Dedicated(client) => client.desktop_attachment(),
+            Self::Token(client) => client.identity(),
             Self::Attached(client) => client.identity.clone(),
         }
     }
     pub async fn stop(&mut self) -> Result<()> {
         match self {
             Self::Dedicated(client) => client.stop().await,
-            Self::Attached(_) => Ok(()),
+            Self::Attached(_) | Self::Token(_) => Ok(()),
         }
     }
 }

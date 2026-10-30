@@ -3,11 +3,17 @@
 Paths below are from the repository root. This procedure performs a paid rental
 only when the user requests it and the account/budget boundaries are established.
 The successful historical run is evidence, not a reusable launch plan.
+The standing authorization in `AGENTS.md` permits spending existing funded
+credit until exhausted, without repeated funding approval; no top-ups are allowed.
+
+For stock-Mesh token-only v0, also follow `docs/V0_TOKEN_JOIN.md`. Historical
+private-fork images below do not qualify stock main. Keep certificate claims
+exclusive to the certified path.
 
 ## 1. Reuse the tested artifacts
 
 Read `deploy/container/native-source.json` and
-`deploy/container/listener-agent-evidence.json` for exact pins. The Linux AMD64
+the privately retained listener-agent receipt for exact pins. The Linux AMD64
 runtime is already published with its model and actual mesh node. Download the
 Mac ARM64 CLI and native client from the private release when appropriate:
 
@@ -84,10 +90,9 @@ plus cleanup, and at least 240 seconds reserved for cleanup. These implementatio
 ceilings do not grant spending authority. Budget validation may impose stricter
 limits. Choose a cap within the remaining cumulative authorization.
 
-The CLI currently uses a fixed bounded demonstration prompt and one completion;
-it is not a persistent interactive chat server. Do not extend rental lifetime
-by disabling cleanup to make a playground. Implement an explicitly bounded
-interactive mode separately if requested.
+The CLI performs a bounded canary. With an explicitly configured control
+directory, the desktop session may remain active until removal or the existing
+deadline. Do not extend rental lifetime by disabling cleanup.
 
 ## 4. Run once and retain evidence
 
@@ -100,8 +105,11 @@ responses, signed log URLs, SSH stdin frames, native private material or keys.
 The run arms independent cleanup before consuming the durable CREATE claim.
 Do not repeat the command or reuse/reset its directory after failure.
 
-The successful path verifies certificate delivery, discovers the exact served
-model through the owner client, requests inference, then destroys the resource.
+The certified path verifies certificate delivery before discovering the exact
+served model and requesting owner-routed inference. Token-only v0 instead verifies
+the selected mesh, sole intended worker and exact model canary; it always reports
+`certificate_verified: false` and never claims owner-certified admission. Both
+paths then destroy the resource.
 Only after independent provider-confirmed absence does it release the completion.
 Retain `demo-evidence.json`, `cleanup-evidence.json`, `preflight-evidence.json`,
 `watchdog.events.jsonl`, and `state.db` privately. Do not publish the whole run

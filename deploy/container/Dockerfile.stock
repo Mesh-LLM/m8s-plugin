@@ -1,0 +1,24 @@
+# Stock-Mesh v0 worker. Supply a complete unmodified upstream Linux CUDA product,
+# built from the recorded main revision using upstream `just` recipes.
+# No private fork, patches, owner keys, tokens, weights, or provider secrets.
+ARG RUNTIME_BASE
+FROM ${RUNTIME_BASE} AS unpack
+ARG STOCK_PRODUCT_SHA256
+COPY stock-product.tar.gz /tmp/stock-product.tar.gz
+RUN test -n "$STOCK_PRODUCT_SHA256" \
+    && echo "$STOCK_PRODUCT_SHA256  /tmp/stock-product.tar.gz" | sha256sum -c - \
+    && mkdir -p /opt/mesh \
+    && tar --extract --gzip --file=/tmp/stock-product.tar.gz --directory=/opt/mesh --strip-components=1 \
+    && rm /tmp/stock-product.tar.gz \
+    && test -x /opt/mesh/mesh-llm
+# Keep the compressed input out of the shipped image's layers.
+FROM ${RUNTIME_BASE}
+COPY --from=unpack /opt/mesh /opt/mesh
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libgomp1 libdbus-1-3 openssh-server python3 tini \
+    && rm -f /etc/ssh/ssh_host_* && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 65532 m8s \
+    && useradd --uid 65532 --gid 65532 --no-create-home --home-dir /var/lib/m8s --shell /bin/sh --password '*' m8s \
+    && mkdir -p /run/sshd
+COPY --chmod=0555 vast_provision.py token_provision.py token_status.py /usr/local/lib/m8s/
+EXPOSE 2222/tcp 40100/udp
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/bin/python3", "/usr/local/lib/m8s/token_provision.py", "serve"]

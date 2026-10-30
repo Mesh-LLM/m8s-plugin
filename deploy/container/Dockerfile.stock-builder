@@ -1,0 +1,24 @@
+# Experimental stock-main product build; qualification status: docs/V0_VALIDATION.md.
+# No provider credentials, join tokens, model weights or private-fork source.
+FROM nvidia/cuda@sha256:4b9ed5fa8361736996499f64ecebf25d4ec37ff56e4d11323ccde10aa36e0c43 AS builder
+ENV DEBIAN_FRONTEND=noninteractive CARGO_BUILD_JOBS=2 CMAKE_BUILD_PARALLEL_LEVEL=2
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git build-essential cmake ninja-build pkg-config libssl-dev libdbus-1-dev protobuf-compiler clang lld mold libclang-dev zlib1g-dev libzstd-dev liblzma-dev xz-utils python3 && rm -rf /var/lib/apt/lists/*
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o /tmp/rustup.sh && sh /tmp/rustup.sh -y --default-toolchain 1.95.0 --profile minimal
+ENV PATH=/root/.cargo/bin:/usr/local/bin:$PATH
+RUN cargo install just --version 1.59.0 --locked -j2
+RUN mkdir -p /tmp/node && cd /tmp/node && curl -fsSLO https://nodejs.org/dist/v24.20.0/node-v24.20.0-linux-x64.tar.xz && curl -fsSLO https://nodejs.org/dist/v24.20.0/SHASUMS256.txt && grep ' node-v24.20.0-linux-x64.tar.xz$' SHASUMS256.txt | sha256sum -c - && tar xJf node-v24.20.0-linux-x64.tar.xz -C /usr/local --strip-components=1 && npm install -g pnpm@10.34.5 --registry https://registry.npmjs.org
+WORKDIR /src
+RUN git init && git remote add origin https://github.com/Mesh-LLM/mesh-llm.git && git fetch --depth 1 origin 2809443345ea8134db62a8b433f5bb2bb5f1d123 && git checkout --detach FETCH_HEAD && test "$(git rev-parse HEAD)" = 2809443345ea8134db62a8b433f5bb2bb5f1d123
+RUN TARGETARCH=amd64 SCCACHE_VERSION=0.16.0 scripts/install-sccache.sh
+ENV LLAMA_STAGE_CUDA_ARCHITECTURES=120 MESH_LLM_CUDA_TOOLKIT_MAJOR=12 MESH_CUDA_VERSION=12.8
+RUN apt-get update && apt-get install -y --no-install-recommends patchelf file jq zip unzip zstd && rm -rf /var/lib/apt/lists/*
+
+# NCCL is auto-detected in the CUDA devel base but is outside upstream's
+# reviewed runtime redistributable set. This is a single-GPU profile.
+RUN scripts/prepare-llama.sh pinned \
+    && LLAMA_STAGE_LINK_MODE=dynamic LLAMA_STAGE_BACKEND=cuda scripts/build-llama.sh -DGGML_CUDA_NCCL=OFF
+RUN scripts/package-native-runtime.sh --backend cuda --target x86_64-unknown-linux-gnu
+RUN just release-host-build
+RUN just release-bundle v0.78.0 /out cuda
+FROM scratch AS product
+COPY --from=builder /out/ /

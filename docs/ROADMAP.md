@@ -8,10 +8,10 @@ the narrower proven demo from original P0–P3 acceptance.
 
 ## Completed acceptance
 
-The opt-in CLI deployed Vast instance 57330173, securely bootstrapped the actual
+The opt-in CLI deployed Vast historical instance, securely bootstrapped the actual
 mesh node, routed real Qwen inference through its owner client, destroyed the
 resource, and independently verified absence. See the
-[receipt](../deploy/container/demo-proof.json). The default daemon remains a
+[receipt](HISTORICAL_EVIDENCE.md). The default daemon remains a
 development controller; this live result does not promote it to a fleet manager.
 
 ## Next implementation slices

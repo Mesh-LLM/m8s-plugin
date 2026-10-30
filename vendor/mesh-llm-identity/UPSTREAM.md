@@ -1,10 +1,8 @@
 # Canonical MP-001 package import
 
 Accepted Mesh-LLM commit: f2cbf8fd8159a16401040a3536550d49a3da8ce2
-Source checkout inspected: /Users/sandro/.agor/worktrees/local/mesh-mp001-reviewed/prototype-keyless-main-integration (provenance only, never a build path).
 Package path: mesh/crates/mesh-llm-identity.
 Original m8s import baseline: 14ff55348bf5b5559e6214f09c2d26a34736c58b.
-Design: agor://kb/document/01a16108-e37d-75cf-8223-ea95551f59bc
 
 ## Inventory / authority
 Fourteen complete src Rust files, public certificate test, package README, and

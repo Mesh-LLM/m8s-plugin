@@ -925,15 +925,15 @@ The 2026-10-23 live attempt started the real image on Vast but did not reach
 bootstrap/inference because of missing UDP mapping and a dual-stack parser issue.
 The exact instance was destroyed and independently confirmed absent. That historical failure was resolved by the later successful attempt described
 below; it is retained as failure evidence, not a current bootstrap blocker.
-See `deploy/container/vast-networking-attempt-evidence.json`. Do not represent the
+See the privately retained networking receipt ([historical evidence scope](../../docs/HISTORICAL_EVIDENCE.md)). Do not represent the
 published image, successful container startup, or source tests as inference proof.
 
 ### Live acceptance (2026-10-23)
 
-The full `prototype launch` command passed on Vast instance **57330173**,
+The full `prototype launch` command passed on Vast historical instance,
 including canonical certificate delivery, owner-routed Qwen inference, exact
 resource destruction, and independent provider absence confirmation. See
-`deploy/container/demo-proof.json`. Earlier failed attempts remain recorded.
+the privately retained demo receipt ([historical evidence scope](../../docs/HISTORICAL_EVIDENCE.md)). Earlier failed attempts remain recorded.
 The served API model ID is `local-gguf/sha256-74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db`;
 the filename remains the node's artifact-selection label. Heartbeats are capped
 at one second to stay inside the control stream's five-second idle timeout.

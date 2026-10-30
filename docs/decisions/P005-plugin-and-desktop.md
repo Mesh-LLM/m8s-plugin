@@ -15,11 +15,10 @@ Retain its React/Tauri visual language and chat. Add fleet, providers and infere
 navigation with measured activity tiles. Desktop release distribution is out of
 scope; use the app for testing and demo recordings. Credentials remain backend-only.
 
-The user explicitly authorized contribution to the organization repository and
-use of /Users/joabz/Development/m8s/.env for Vast testing, up to available loaded
-credit, superseding historical session dollar caps. Do not top up the account.
-Each actual attempt still records a finite lease, current available funding and
-independently surviving exact-resource cleanup. Preserve prior liabilities.
+Publication and paid runs follow the current session's explicit authorization.
+A new paid attempt requires a current budget and selected credential file; past
+loaded credit is not standing spending authority. Record finite leases, preserve
+prior liabilities, and arm independently surviving exact-resource cleanup.
 
 ## Integration issues and acceptance
 

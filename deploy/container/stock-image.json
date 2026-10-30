@@ -1,0 +1,19 @@
+{
+  "schema": "m8s.stock-worker-build/v1",
+  "image": "ghcr.io/joabzzz/m8s-prototype@sha256:84d54fe349c24a214a53a691277831e6652234a375f25eb287a01f09ae4ea064",
+  "source_repository": "https://github.com/Mesh-LLM/mesh-llm",
+  "source_revision": "2809443345ea8134db62a8b433f5bb2bb5f1d123",
+  "product_version": "0.78.0",
+  "product_archive_sha256": "6ec6f1e1c763ee49731fba1910878018c15e5b1ed7295ccf4634c5d8177150b1",
+  "native_abi": "0.1.74",
+  "runtime_release": "0.76.1",
+  "target": "x86_64-unknown-linux-gnu",
+  "cuda_major": 12,
+  "gpu_arches": [
+    "120"
+  ],
+  "nccl": false,
+  "runtime_base": "nvidia/cuda@sha256:828c4d878adcaa4265d80c95d8ec877149b49bb2419a4cf3bb6aa889bbb7ca2e",
+  "qualification": "Post-review stop-signal supervisor fix: local SSH refusal/cancel/deadline and anonymous pull passed; same unchanged stock product. Live GPU evidence uses live_accepted_image.",
+  "live_accepted_image": "ghcr.io/joabzzz/m8s-prototype@sha256:35f7b629876cc888f951410485012799cb2c2fc4ca928a07f51aa531526e26e9"
+}

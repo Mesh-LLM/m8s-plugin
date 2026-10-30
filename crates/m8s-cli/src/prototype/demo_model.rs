@@ -68,7 +68,8 @@ impl DemoModel {
             // transfer framing separately from the disk allocation. The pinned
             // non-sharded artifact has one 16.465 GB file. 64 GB covers two
             // full download paths plus the <13 GB unpacked image and >18 GB headroom;
-            // native retries and draft-model downloads are disabled.
+            // Hub/Xet request retries and draft downloads are disabled; token v0
+            // may restart a failed model download once within the original deadline.
             Self::Qwen38 => 64,
             Self::Qwen | Self::Flint => u64::from(disk_gb),
         }
