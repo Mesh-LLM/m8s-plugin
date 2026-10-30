@@ -1,10 +1,13 @@
 # m8s-plugin
 
-![m8s token-only v0 architecture preview; live qualification pending](docs/assets/v0-cover.svg)
+[![Real Qwen 27B app conversation on rented stock-Mesh compute](docs/assets/v0-cover.png)](docs/assets/qwen27-demo.mp4)
 
-Bounded rented compute for Mesh. **Stock-Mesh v0 is under development and has not
-passed end-to-end live acceptance.** Do not treat the historical Qwen demo as
-proof of this workflow: it used a private runtime fork.
+[Watch the one-minute demo](docs/assets/qwen27-demo.mp4) · [30-second GIF](docs/assets/qwen27-demo.gif) · [Acceptance evidence](docs/V0_ACCEPTANCE.md)
+
+Bounded rented compute for Mesh. **The pinned stock-Mesh v0 workflow passed a
+real rental, inference, app conversation and independently confirmed cleanup.**
+This is an experimental, single-rental workflow; the earlier private-fork demo
+is separate.
 
 The experimental v0 sends a join token through host-key-verified SSH to stock Mesh
 `--join-file`. A token supplies connection information, **not an owner-issued
@@ -52,9 +55,9 @@ adapter creates a funding authorization.
 
 The plugin SDK is pinned to upstream main commit
 `2809443345ea8134db62a8b433f5bb2bb5f1d123`. The real host handshake and MCP status call passed; see
-[the validation checkpoint](docs/V0_VALIDATION.md). The stock worker product and
-remote token-only attachment passed. Model transfer stalled before inference,
-so the full rental/chat flow and replacement demo remain unverified.
+[the validation checkpoint](docs/V0_VALIDATION.md). The stock worker product, selected-mesh
+attachment, canary, two app chat turns and removal passed; a separate inventory
+check confirmed no instances or volumes remained. See [live acceptance](docs/V0_ACCEPTANCE.md).
 The published `v0.78.1` release commit is not an ancestor of this checked main tip;
 its downloaded artifacts are not being relabeled as a main build.
 

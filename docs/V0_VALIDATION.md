@@ -7,9 +7,12 @@ credit until exhausted, with no top-ups. Earlier $6/$0.21 figures below are
 historical checkpoints, not current spending limits or approval requirements.
 Preserve the underlying journals and reconcile actual billing; do not double-count
 charges already deducted from provider credit. See `AGENTS.md`.
-A new live capture passed stock GPU inference and two app chat turns. Its controller
-and watchdog confirmed provider absence; the separate final inventory check and
-reviewed showcase publication remain pending.
+**Current outcome:** stock-main selected-mesh inference, two app chat turns,
+controller/watchdog destruction and a separate complete empty-inventory check all
+passed. Reviewed media and exact scope are in [V0_ACCEPTANCE.md](V0_ACCEPTANCE.md).
+The earlier checkpoints below are chronological history; their pending/failure
+statements do not override this result. The plugin still requires CodeRabbit
+review before merge, as requested by the user.
 
 ## Verified locally
 
@@ -326,7 +329,7 @@ The immutable image in `stock-image.json` passed SSH refusal, cancellation,
 deadline and anonymous digest-pull checks. Live recovery/inference is still pending.
 
 
-## Successful capture, final inventory/publication pending
+## Successful capture (superseded by completed acceptance above)
 
 The qualified recovery image completed a real selected-mesh run with stock main
 `280944334` on both the passive app-owned client and rented worker. One supervised
@@ -347,3 +350,14 @@ The recorded UI briefly retained stale peer hardware after provider-confirmed
 removal. The edit must disclose that discovery lag rather than invent a refreshed
 fleet state. The recording does not demonstrate live GPU utilization, owner
 certificate issuance, repeated bookings or multiple concurrent rentals.
+
+
+## Final acceptance
+
+The separate provider inventory check passed after the Mac became accessible,
+confirming complete empty instance and volume inventories. The edited real UI
+recording, redacted cover and artifact hashes are published in this tree. The
+latest checks passed: 53 container tests, full serial workspace checks, strict
+Clippy, seven plugin tests, and 52 UI tests with lint/build. No paid resources
+remain. Accounting and raw evidence remain private; uncertain reservations remain
+retained. See [V0_ACCEPTANCE.md](V0_ACCEPTANCE.md) for the concise final result.

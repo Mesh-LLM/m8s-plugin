@@ -1,7 +1,7 @@
 # Proposed v0: token-based rental attachment
 
-Status: implemented with a published, locally qualified stock worker; remote GPU
-and end-to-end acceptance pending.
+Status: the pinned stock-main workflow passed live selected-mesh inference, two
+app chat turns and independently confirmed destruction. See [acceptance](V0_ACCEPTANCE.md).
 The certified prototype remains separate from the explicit token-only path.
 
 The v0 goal is to attach one bounded Vast rental to a selected mesh using a
@@ -46,8 +46,8 @@ must remain clearly identified until this is complete.
 
 The branch adds the explicit `token_target` plan field, private token framing,
 restricted `join-v0` SSH command, stock worker supervisor, and shared
-`m8s.operator/v0` plugin/desktop operation adapter. These are implementation
-changes, not a successful live demonstration. The existing certified mode is
+`m8s.operator/v0` plugin/desktop operation adapter. These changes subsequently passed the pinned live workflow described in
+[V0_ACCEPTANCE.md](V0_ACCEPTANCE.md). The existing certified mode is
 preserved and cannot silently fall back to token mode.
 
 Prepare a fresh private plan from [the inert v0 template](v0-plan.template.json)
