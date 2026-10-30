@@ -1,6 +1,12 @@
 # v0 validation checkpoint
 
 This is a sanitized source-validation summary, not a paid rental receipt.
+
+**Current funding policy:** the user authorizes the existing funded provider
+credit until exhausted, with no top-ups. Earlier $6/$0.21 figures below are
+historical checkpoints, not current spending limits or approval requirements.
+Preserve the underlying journals and reconcile actual billing; do not double-count
+charges already deducted from provider credit. See `AGENTS.md`.
 Stock GPU inference and the replacement desktop recording remain unverified.
 
 ## Verified locally
@@ -256,8 +262,9 @@ empty instance/volume inventory passed; the temporary provisioning/invite/owner
 keys were removed and the failed capture preserved privately. The new retained
 reservation is 1,865,187 micro-USD. Across all three attempts, uncertain liability
 is 5,788,895 micro-USD, leaving 211,105 under the 6,000,000 authorization. These
-are reservations, not settled charges. There is no active rental, and the
-remaining allowance cannot cover another attempt's required contingency.
+are reservations, not settled charges. At that checkpoint there was no active rental and the then-applied session
+allowance was insufficient. That session restriction has since been superseded
+by the user's standing funded-credit authorization.
 
 The new local regression harness also passed from its committed entry point:
 verified stock-main local ownership, mutual peer discovery, plugin status,

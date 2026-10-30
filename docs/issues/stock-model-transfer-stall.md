@@ -26,8 +26,9 @@ model lifecycle error. Before another paid attempt:
   the live failure's cause.
 - Qualify any worker change against the exact image and retain existing startup,
   canary and cleanup bounds. Do not reset consumed claims or unsettled liabilities.
-- Obtain sufficient remaining authorization or reconcile actual settled billing
-  before renting again. No successful media may replace the preview until actual
+- Use the standing funded-credit authorization, with fresh balance/prices and
+  reconciliation of actual outstanding liabilities; the earlier $6 session cap
+  is superseded. No successful media may replace the preview until actual
   owner-routed inference, app conversation and provider absence all pass.
 
 

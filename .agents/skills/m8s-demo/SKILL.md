@@ -61,6 +61,8 @@ heartbeats; no plaintext or relay-policy workaround for a denied/failed path.
 
 Keep the selected credential file outside the repository, build contexts and
 archives. Pass its path, never its value, and never source it as shell code.
-A new run needs current user authorization and bounded available budget; old
-approval IDs and the historical top-up are not renewable demo credits. Honor
-existing session authorization without asking again when it covers the action.
+A new run needs current user authorization and bounded available budget. The
+standing funded-credit authorization in `AGENTS.md` covers subsequent attempts
+until that credit is exhausted; do not reapply superseded session caps or ask for
+per-attempt funding again. Fresh provider observations, bounded liability and
+cleanup still apply. Historical receipts are not themselves funding authority.

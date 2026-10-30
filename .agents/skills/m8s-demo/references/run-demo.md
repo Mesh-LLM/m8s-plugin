@@ -3,6 +3,8 @@
 Paths below are from the repository root. This procedure performs a paid rental
 only when the user requests it and the account/budget boundaries are established.
 The successful historical run is evidence, not a reusable launch plan.
+The standing authorization in `AGENTS.md` permits spending existing funded
+credit until exhausted, without repeated funding approval; no top-ups are allowed.
 
 For stock-Mesh token-only v0, also follow `docs/V0_TOKEN_JOIN.md`. Historical
 private-fork images below do not qualify stock main. Keep certificate claims
