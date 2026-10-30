@@ -36,3 +36,9 @@ cleanup and real desktop conversation must be verified before recording a new
 demo. Until then the README shows an explicitly labeled architecture preview.
 
 See [the implementation and acceptance gates](../V0_TOKEN_JOIN.md).
+
+Read-only `status` and `offers` do not take the exclusive mutation lock. Quotes,
+launch and removal remain serialized, and durable launch intent still precedes
+effects. Status may observe an incomplete new file and must project it
+conservatively as unready. A UI status poll must not make concurrent provider
+discovery report missing credentials or prevent cleanup/status observation.

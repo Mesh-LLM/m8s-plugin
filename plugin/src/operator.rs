@@ -266,15 +266,22 @@ pub async fn execute(request: Request) -> Result<Value> {
     execute_config(&c, request).await
 }
 async fn execute_config(c: &Config, request: Request) -> Result<Value> {
-    let lock = fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(c.root.join("operator.lock"))?;
-    fs2::FileExt::try_lock_exclusive(&lock).context("Another operation is active")?;
+    // Read-only observations must remain available while quotes or launches mutate
+    // control state. Partial/new files project conservatively as not ready.
+    let _lock = if matches!(&request, Request::Status {} | Request::Offers {}) {
+        None
+    } else {
+        let lock = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(c.root.join("operator.lock"))?;
+        fs2::FileExt::try_lock_exclusive(&lock).context("Another operation is active")?;
+        Some(lock)
+    };
     let intent = c.root.join("operator-intent.json");
     let result = match request {
         Request::Offers {} => {
@@ -408,6 +415,46 @@ async fn execute_config(c: &Config, request: Request) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn status_remains_available_while_a_mutation_holds_the_lock() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().canonicalize().unwrap();
+        let target = root.join("target.json");
+        write_new(
+            &target,
+            &json!({"node_id":"node","mesh_id":"mesh","console_port":0}),
+        )
+        .unwrap();
+        let credential = root.join("synthetic.env");
+        write_new(&credential, &json!({"fixture":true})).unwrap();
+        let c = Config {
+            cli: root.join("unused-controller"),
+            plan: json!({"directory":root.join("unused-attempt"),"token_target":target,"credential_file":credential}),
+            root: root.clone(),
+        };
+        let lock = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(root.join("operator.lock"))
+            .unwrap();
+        fs2::FileExt::try_lock_exclusive(&lock).unwrap();
+        let status = execute_config(&c, Request::Status {}).await.unwrap();
+        assert_eq!(status["result"]["provider_configured"], true);
+        assert_eq!(status["result"]["attempt_consumed"], false);
+        assert_eq!(status["result"]["ready"], false);
+        let mutation = execute_config(
+            &c,
+            Request::Launch {
+                quote_id: "synthetic".into(),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(mutation.to_string().contains("Another operation is active"));
+        assert!(!root.join("operator-intent.json").exists());
+    }
     #[test]
     fn provider_configuration_refuses_missing_shared_or_linked_files() {
         use std::os::unix::fs::{PermissionsExt, symlink};
