@@ -26,6 +26,21 @@ fn now() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
+// Configuration presence only; provider acceptance is checked by live operations.
+// Project a boolean without reading or returning the key or its location.
+fn provider_configured(plan: &Value) -> bool {
+    let Some(path) = plan["credential_file"].as_str().map(Path::new) else {
+        return false;
+    };
+    path.is_absolute()
+        && fs::symlink_metadata(path).is_ok_and(|m| {
+            m.is_file()
+                && m.uid() == unsafe { libc::geteuid() }
+                && m.mode() & 0o022 == 0
+                && m.len() <= 65536
+                && m.nlink() == 1
+        })
+}
 fn read(path: &Path) -> Result<Value> {
     ensure!(
         path.is_absolute() && path.canonicalize()? == path,
@@ -385,7 +400,7 @@ async fn execute_config(c: &Config, request: Request) -> Result<Value> {
                             .is_some_and(|status| worker_present(status, r))
                 });
 
-            json!({"ready":active_ready,"offer_id":read(&intent).ok().map(|v|v["offer_id"].clone()),"expires_at":read(&intent).ok().map(|v|v["expires_at"].clone()),"removal_requested":c.root.join("down-requested").exists(),"node_id":ready.as_ref().and_then(|r|r["node_id"].as_str()),"target":{"node_id":target["node_id"],"mesh_id":target["mesh_id"]},"attempt_consumed":intent.try_exists()?,"provider_confirmed_removed":removed,"instance_id":node.as_ref().and_then(|v|v["instance_id"].as_u64()),"certificate_verified":false,"admission":"token-only-provider-trusted","inference_verified":removed&&evidence.as_ref().is_some_and(|e|e["schema"]=="m8s.vast-demo-evidence/v1"&&e["certificate_verified"]==false&&e["admission"]=="token-only-provider-trusted"&&e["owner_routed_inference"]==true&&e["provider_confirmed_absent"]==true&&e["image"]==c.plan["image"]&&node.as_ref().is_some_and(|n|e["instance_id"]==n["instance_id"]))})
+            json!({"provider_configured":provider_configured(&c.plan),"ready":active_ready,"offer_id":read(&intent).ok().map(|v|v["offer_id"].clone()),"expires_at":read(&intent).ok().map(|v|v["expires_at"].clone()),"removal_requested":c.root.join("down-requested").exists(),"node_id":ready.as_ref().and_then(|r|r["node_id"].as_str()),"target":{"node_id":target["node_id"],"mesh_id":target["mesh_id"]},"attempt_consumed":intent.try_exists()?,"provider_confirmed_removed":removed,"instance_id":node.as_ref().and_then(|v|v["instance_id"].as_u64()),"certificate_verified":false,"admission":"token-only-provider-trusted","inference_verified":removed&&evidence.as_ref().is_some_and(|e|e["schema"]=="m8s.vast-demo-evidence/v1"&&e["certificate_verified"]==false&&e["admission"]=="token-only-provider-trusted"&&e["owner_routed_inference"]==true&&e["provider_confirmed_absent"]==true&&e["image"]==c.plan["image"]&&node.as_ref().is_some_and(|n|e["instance_id"]==n["instance_id"]))})
         }
     };
     Ok(json!({"schema":"m8s.operator/v0","result":result}))
@@ -393,6 +408,29 @@ async fn execute_config(c: &Config, request: Request) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn provider_configuration_refuses_missing_shared_or_linked_files() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("selected.env");
+        let plan = json!({"credential_file":file});
+        assert!(!provider_configured(&plan));
+        fs::write(&file, "synthetic fixture; presence is not key verification").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(provider_configured(&plan));
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o666)).unwrap();
+        assert!(!provider_configured(&plan));
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o600)).unwrap();
+        let link = temp.path().join("linked.env");
+        symlink(&file, &link).unwrap();
+        assert!(!provider_configured(&json!({"credential_file":link})));
+        fs::remove_file(&link).unwrap();
+        fs::hard_link(&file, &link).unwrap();
+        assert!(!provider_configured(&plan));
+        assert!(!provider_configured(
+            &json!({"credential_file":"relative.env"})
+        ));
+    }
     #[test]
     fn readiness_requires_the_live_sole_worker() {
         let ready = json!({"node_id":"worker"});

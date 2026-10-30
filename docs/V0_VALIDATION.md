@@ -19,7 +19,7 @@ Stock GPU inference and the replacement desktop recording remain unverified.
   confirmed its isolated host stopped afterward.
 - The full root `scripts/check` passed, including the seven synthetic PTY/ACL
   tests previously excluded. Formatting and strict workspace Clippy passed too.
-  The plugin's four tests and strict Clippy passed; 44 container tests passed, including interruption/denial cleanup and
+  The plugin's five tests and strict Clippy passed; 44 container tests passed, including interruption/denial cleanup and
   refusal to replay consumed provisioning and process-group cleanup after the
   host exits before its children.
 - Built the release plugin archive with `plugin/package.sh`. Stock main installed
@@ -35,8 +35,16 @@ Stock GPU inference and the replacement desktop recording remain unverified.
   offers and a budget-qualified quote bound to the app's selected mesh. No launch
   intent or rental was created. This expired observation is not a price promise
   or permission to reuse the quote; a live run needs a new quote and inventory.
+- Provider status now projects credential-file configuration from the plugin,
+  without returning the key or path. The app uses this to enable browsing and
+  identifies externally managed setup instead of offering unsupported key edits.
+  Tests cover missing, writable and linked files and both browser states.
+  The rebuilt app also passed a real, unmocked browser check: provider status
+  came from the release plugin, Add compute displayed live offers, and a
+  budget-qualified quote was bound to the selected mesh. No launch intent or
+  rental was created; the isolated app stopped afterward.
 - The companion app's Rust tests and strict Clippy passed. UI lint/build and
-  all 48 mocked browser tests passed. Recorder/editor syntax checks passed.
+  all 50 mocked browser tests passed. Recorder/editor syntax checks passed.
   These are implementation checks, not GPU or real-conversation acceptance.
 
 - Two isolated stock-main passive nodes with independent identities joined the
