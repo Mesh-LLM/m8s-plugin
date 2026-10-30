@@ -27,7 +27,16 @@ current main/toolchain pins and the single-GPU `GGML_CUDA_NCCL=OFF` build option
 The CUDA devel base auto-enables NCCL otherwise, but upstream's package validator
 does not include NCCL in its reviewed redistributables. The recipe keeps that
 validator unchanged. Its `product` target exports the upstream archives; it is
-not the worker image. Qualification is still pending as recorded above.
+not the worker image. It targets Linux x86_64, CUDA 12 and SM120 only. Export
+from an empty build context (the recipe fetches only public source/dependencies):
+
+```sh
+docker buildx build --platform linux/amd64 --target product \
+  --output "type=local,dest=$PRODUCT_OUTPUT" \
+  -f deploy/container/Dockerfile.stock-builder "$EMPTY_BUILD_CONTEXT"
+```
+
+Qualification is still pending as recorded above.
 
 Prepare a minimal context containing only:
 
