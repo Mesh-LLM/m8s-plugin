@@ -60,3 +60,11 @@ through the same pinned host key and records observations privately. The plugin
 only exposes observations bound to the exact resource/image and at most 30
 seconds old. A worker reporting its mesh identity is not proof of peer discovery
 or inference. Existing canary gates and cleanup deadlines remain authoritative.
+
+
+Worker observations also project bounded requested/hosted/runtime model counts,
+known loading/serving flags, and a count of reported runtime errors. Lists are
+capped at 256 entries and a partial-snapshot flag marks truncation. Error text,
+model paths and arbitrary lifecycle strings are never returned. Missing fields
+remain unknown. Neither these counters nor a worker's serving flag bypass the
+selected-mesh discovery and owner-routed canary gates.

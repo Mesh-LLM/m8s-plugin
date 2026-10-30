@@ -301,6 +301,11 @@ fn worker_observation(
         "worker_write_bytes",
         "network_received_bytes",
         "network_sent_bytes",
+        "requested_model_count",
+        "hosted_model_count",
+        "runtime_model_count",
+        "runtime_instance_count",
+        "runtime_error_count",
     ] {
         if let Some(n) = worker[key].as_u64() {
             result[key] = n.into();
@@ -311,6 +316,9 @@ fn worker_observation(
         "api_reachable",
         "mesh_matches",
         "cache_scan_truncated",
+        "runtime_snapshot_truncated",
+        "node_loading",
+        "node_serving",
     ] {
         if let Some(v) = worker[key].as_bool() {
             result[key] = v.into();
@@ -480,11 +488,12 @@ mod tests {
     use super::*;
     #[test]
     fn observations_are_fresh_resource_bound_and_not_readiness() {
-        let value = json!({"schema":"m8s.token-observation/v0","image":"image","instance_id":7,"observed_at":100,"worker":{"schema":"m8s.token-worker-status/v0","phase":"starting","worker_running":true,"cache_file_bytes":123,"join_token":"private-token","ready":true}});
+        let value = json!({"schema":"m8s.token-observation/v0","image":"image","instance_id":7,"observed_at":100,"worker":{"schema":"m8s.token-worker-status/v0","phase":"starting","worker_running":true,"cache_file_bytes":123,"runtime_error_count":2,"recent_errors":["private-error"],"join_token":"private-token","ready":true}});
         let node = json!({"instance_id":7});
         let plan = json!({"image":"image"});
         let observed = worker_observation(Some(&value), Some(&node), &plan, 110).unwrap();
         assert_eq!(observed["cache_file_bytes"], 123);
+        assert_eq!(observed["runtime_error_count"], 2);
         assert!(observed.get("ready").is_none());
         assert!(!observed.to_string().contains("private"));
         for (field, changed) in [

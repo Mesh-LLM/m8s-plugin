@@ -26,6 +26,26 @@ class TokenStatusTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 status.project({**value, 'phase': phase})
 
+    def test_runtime_projection_is_bounded_and_never_returns_private_error_text(self):
+        value = {'node_state': 'loading', 'requested_models': ['private/model'],
+                 'hosted_models': [], 'token': 'private-invite',
+                 'runtime': {'models': [{'name': '/private/model'}],
+                             'lifecycle_instances': [{'state': 'private-state'}],
+                             'intent_summary': {'recent_errors': ['private-token-in-error'] * 300}}}
+        result = status.runtime_metrics(value)
+        self.assertEqual(result['runtime_error_count'], 256)
+        self.assertEqual(result['requested_model_count'], 1)
+        self.assertEqual(result['hosted_model_count'], 0)
+        self.assertTrue(result['node_loading'])
+        self.assertTrue(result['runtime_snapshot_truncated'])
+        self.assertNotIn('private', json.dumps(result))
+        self.assertEqual(status.runtime_metrics({'runtime': None}), {})
+        self.assertEqual(status.runtime_metrics([]), {})
+        self.assertEqual(status.runtime_metrics({'runtime': {'intent_summary': {'recent_errors': 'private'}}}), {})
+        self.assertNotIn('node_loading', status.runtime_metrics({'node_state': 'private'}))
+        projected = status.project({'schema': status.SCHEMA, 'phase': 'joined', **result})
+        self.assertEqual(projected['runtime_error_count'], 256)
+
     def test_private_atomic_snapshot_and_file_refusals(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

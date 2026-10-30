@@ -287,6 +287,11 @@ fn project_token_status(value: &Value) -> Result<Value> {
         "worker_write_bytes",
         "network_received_bytes",
         "network_sent_bytes",
+        "requested_model_count",
+        "hosted_model_count",
+        "runtime_model_count",
+        "runtime_instance_count",
+        "runtime_error_count",
     ] {
         if let Some(n) = value[key].as_u64() {
             result[key] = n.into();
@@ -297,6 +302,9 @@ fn project_token_status(value: &Value) -> Result<Value> {
         "api_reachable",
         "mesh_matches",
         "cache_scan_truncated",
+        "runtime_snapshot_truncated",
+        "node_loading",
+        "node_serving",
     ] {
         if let Some(v) = value[key].as_bool() {
             result[key] = v.into();

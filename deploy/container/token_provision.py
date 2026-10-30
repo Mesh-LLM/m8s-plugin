@@ -93,11 +93,13 @@ def receive():
                 break
             if observed - last_snapshot >= 1:
                 api_reachable, mesh_matches, identity_ready = False, False, False
+                status = None
                 try:
                     with opener.open('http://127.0.0.1:3131/api/status', timeout=1) as r:
                         raw = r.read(65537)
                     common.require(len(raw) <= 65536)
                     status = json.loads(raw)
+                    common.require(type(status) is dict)
                     api_reachable = True
                     mesh_matches = status.get('mesh_id') == config['mesh_id']
                     node = status.get('node_id')
@@ -111,7 +113,7 @@ def receive():
                 except (ValueError, OSError):
                     pass  # Admission/readiness remains unconfirmed; never weaken policy.
                 phase = 'joined' if identity_ready else ('waiting_for_mesh' if api_reachable else 'starting')
-                token_status.snapshot(common.ROOT, phase, observed - started, child, api_reachable, mesh_matches)
+                token_status.snapshot(common.ROOT, phase, observed - started, child, api_reachable, mesh_matches, status)
                 last_snapshot = observed
             time.sleep(0.25)
     finally:

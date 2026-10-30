@@ -18,9 +18,9 @@ Existing observations omit raw worker logs and private material. They distinguis
 process health, mesh identity and cache/network counters, but not the underlying
 model lifecycle error. Before another paid attempt:
 
-- Add a bounded, closed-field projection of model lifecycle state and error
-  presence from stock Mesh's runtime status; never return raw error text, paths
-  or tokens through the provisioning command.
+- A bounded projection of model counts, loading/serving flags and runtime-error
+  counts is implemented for the next qualified worker. Raw error text, paths
+  and tokens are excluded. Local checks do not establish the live stall cause.
 - Reproduce connected-but-stalled transfer behavior locally; distinguish request
   retry limits from a progress deadline. A synthetic stall does not establish
   the live failure's cause.

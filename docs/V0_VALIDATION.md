@@ -268,3 +268,30 @@ The replacement demo remains blocked on successful real inference and chat.
 A local connected-response stall probe made one payload request and remained
 pending until its external 20-second cancellation. Retry controls did not create
 a progress deadline. This synthetic result is not attribution of the live stall.
+
+
+## Review and merge gate
+
+The personal app may be merged when ready at the maintainer's discretion. The
+plugin must complete CodeRabbit CI review before merge. Keep its PR in draft
+while inference and the real demo remain unverified; notify the user when it is
+ready to open for review. App merge authorization does not waive plugin review
+or live qualification requirements.
+
+
+## Runtime diagnostic follow-up
+
+The next worker projects bounded model/runtime/error counts and known
+loading/serving flags through the existing pinned status command. The app shows
+requested/hosted counts and reported runtime errors during provisioning, while
+preserving the separate canary gate and removal controls. Missing values stay
+unknown; error text, paths and tokens are excluded.
+
+All 50 container tests, the full serial root check (840 passed, five intentionally
+ignored, no filtered tests), strict Clippy, seven plugin tests, plugin packaging,
+UI lint/build and all 52 browser tests passed. Exact-image refusal, cancellation
+and deadline checks passed. The new image is
+`ghcr.io/joabzzz/m8s-prototype@sha256:749bf97eba4f06c011720ba746d39994ddb001bfb85e57c3214db41d02924be3`;
+anonymous digest access passed with cached layers. Its stock product is unchanged,
+but this new diagnostic image has not been rented or live-qualified. It does not
+fix or identify the live transfer stall by itself.

@@ -9,8 +9,10 @@ PHASES = {'awaiting_join', 'unknown', 'starting', 'waiting_for_mesh', 'joined', 
 COUNTERS = {'elapsed_seconds', 'cache_file_bytes', 'cache_allocated_bytes',
             'cache_file_count', 'cache_incomplete_files', 'worker_rss_bytes',
             'worker_read_bytes', 'worker_write_bytes', 'network_received_bytes',
-            'network_sent_bytes'}
-FLAGS = {'worker_running', 'api_reachable', 'mesh_matches', 'cache_scan_truncated'}
+            'network_sent_bytes', 'requested_model_count', 'hosted_model_count',
+            'runtime_model_count', 'runtime_instance_count', 'runtime_error_count'}
+FLAGS = {'worker_running', 'api_reachable', 'mesh_matches', 'cache_scan_truncated',
+         'runtime_snapshot_truncated', 'node_loading', 'node_serving'}
 
 
 def project(value):
@@ -27,6 +29,34 @@ def project(value):
     code = value.get('worker_exit_code')
     if type(code) is int and -255 <= code <= 255:
         result['worker_exit_code'] = code
+    return result
+
+
+def runtime_metrics(status):
+    """Project counts/known states only; never return error text or model paths."""
+    if type(status) is not dict:
+        return {}
+    result = {}
+    truncated = False
+    runtime = status.get('runtime')
+    runtime = runtime if type(runtime) is dict else {}
+    summary = runtime.get('intent_summary')
+    summary = summary if type(summary) is dict else {}
+    for key, value, expected in [
+        ('requested_model_count', status.get('requested_models'), str),
+        ('hosted_model_count', status.get('hosted_models'), str),
+        ('runtime_model_count', runtime.get('models'), dict),
+        ('runtime_instance_count', runtime.get('lifecycle_instances'), dict),
+        ('runtime_error_count', summary.get('recent_errors'), str),
+    ]:
+        if type(value) is list:
+            truncated |= len(value) > 256
+            result[key] = sum(type(item) is expected and bool(item) for item in value[:256])
+    if result:
+        result['runtime_snapshot_truncated'] = truncated
+    if status.get('node_state') in ('client', 'standby', 'loading', 'serving', 'worker'):
+        result['node_loading'] = status['node_state'] == 'loading'
+        result['node_serving'] = status['node_state'] == 'serving'
     return result
 
 
@@ -129,12 +159,13 @@ def network_metrics():
     return result
 
 
-def snapshot(root, phase, elapsed, child, api_reachable=False, mesh_matches=False):
+def snapshot(root, phase, elapsed, child, api_reachable=False, mesh_matches=False, runtime=None):
     value = {'schema': SCHEMA, 'phase': phase, 'elapsed_seconds': max(0, int(elapsed)),
              'worker_running': phase != 'stopped' and child is not None and child.poll() is None,
              'api_reachable': api_reachable, 'mesh_matches': mesh_matches}
     if child is not None:
         value['worker_exit_code'] = child.returncode
+    value.update(runtime_metrics(runtime))
     value.update(cache_metrics(root))
     value.update(process_metrics(child.pid if child is not None else None))
     value.update(network_metrics())
