@@ -20,6 +20,11 @@ MAGIC = b'M8S-TOKEN-JOIN-V0\n'
 FIELDS = {'schema', 'instance_id', 'image_sha256', 'model', 'mesh_id', 'lifetime_seconds'}
 
 
+class WorkerStopped(Exception):
+    """Stop request that cannot be mistaken for a status-probe I/O failure."""
+
+
+
 def packet(stream):
     common.require(common.exact(stream, len(MAGIC)) == MAGIC)
     size = struct.unpack('>I', common.exact(stream, 4))[0]
@@ -114,7 +119,7 @@ def receive():
     last_snapshot = float('-inf')
     child = None
     def stop(_signal, _frame):
-        raise InterruptedError('worker stopped')
+        raise WorkerStopped('worker stopped')
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGHUP, stop)
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))

@@ -16,7 +16,7 @@ retried with a new nonce. The caller supplies current trusted launch observation
 owner-side signer custody, bundle settings, listener and surviving cleanup.
 The opt-in prototype CLI now composes this library with the actual native node,
 DMS and owner-routed model canary; its historical live result is recorded in
-`deploy/container/demo-proof.json`. The default daemon main remains mock-only.
+the privately retained demo receipt ([historical evidence scope](../../docs/HISTORICAL_EVIDENCE.md)). The default daemon main remains mock-only.
 These persistence tests use synthetic fixtures and do not rerun endpoint or
 provider qualification.
 

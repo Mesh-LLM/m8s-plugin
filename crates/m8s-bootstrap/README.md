@@ -3,7 +3,7 @@
 Owner-side ADR-0006 policy plus optional **real iroh QUIC/TLS adapter**.
 The opt-in prototype now composes this adapter with Store nonce custody and the
 actual native runtime. The 2026-10-23 live demo verified canonical admission and
-owner-routed Qwen inference; see `deploy/container/demo-proof.json` in the repo.
+owner-routed Qwen inference; see the privately retained demo receipt ([historical evidence scope](../../docs/HISTORICAL_EVIDENCE.md)).
 This narrower acceptance does not complete permanent owner signing or live-daemon
 integration. Historical milestone notes below retain their original qualification
 scope; existing endpoint/E PASS was reused, not rerun for this documentation.

@@ -1,7 +1,8 @@
 # Worker container recipes
 
-Stock-Mesh token-only v0 is experimental. A successful stock-main GPU rental and
-replacement demo are still pending; see the [validation checkpoint](../../docs/V0_VALIDATION.md).
+Stock-Mesh token-only v0 is experimental. The pinned stock-main rental, owner-routed
+canary, two app chats and independent cleanup passed; see
+[live acceptance](../../docs/V0_ACCEPTANCE.md). This does not establish owner-certified admission.
 Historical build/run receipts and accounting notes were preserved privately and
 removed from this source guide. [Historical evidence scope](../../docs/HISTORICAL_EVIDENCE.md)
 explains the earlier certified private-fork demonstrations. They are not v0 proof.
@@ -9,7 +10,7 @@ explains the earlier certified private-fork demonstrations. They are not v0 proo
 ## Stock-Mesh worker
 
 `Dockerfile.stock` packages a complete unmodified upstream Linux CUDA product,
-`token_provision.py`, and the shared restricted SSH setup in `vast_provision.py`.
+`token_provision.py`, `token_status.py`, and the shared restricted SSH setup in `vast_provision.py`.
 It contains no model weights or owner signing key. Default plugin loading is
 disabled on the worker; the owner runs the m8s plugin. Mesh downloads the pinned
 Qwen artifact after receiving the join token over host-key-verified SSH stdin.
@@ -38,11 +39,13 @@ docker buildx build --platform linux/amd64 --target product \
 
 The [recorded image build contract](stock-image.json) identifies the published
 stock worker and exact source/product pins. Local product and SSH checks and
-anonymous digest access passed; remote GPU acceptance remains pending.
+anonymous digest access passed. The recorded live-accepted image also passed
+remote GPU inference and independent cleanup; see the exact pins in the acceptance
+summary. Later supervisor-only image qualifications are identified separately.
 
 Prepare a minimal context containing only:
 
-- `Dockerfile.stock`, `vast_provision.py`, and `token_provision.py`;
+- `Dockerfile.stock`, `vast_provision.py`, `token_provision.py`, and `token_status.py`;
 - the complete product archive copied as `stock-product.tar.gz`.
 
 Supply `RUNTIME_BASE` as an explicitly selected immutable image digest with

@@ -1,6 +1,7 @@
 # P007: Explicit token-only admission for stock-Mesh v0
 
-Status: implemented experimentally; stock runtime built; live inference acceptance pending.
+Status: experimental token-only flow live verified with the pinned stock-main
+runtime; see [acceptance evidence](../V0_ACCEPTANCE.md).
 
 P001 remains the desired owner-certified admission contract. The scoped review
 of upstream main found no documented plugin host operation for issuing the
@@ -32,8 +33,9 @@ instance. Uncertain cleanup retains liability and blocks another attempt.
 This is a constrained demonstration path, not general multi-host attribution or
 persistent instances. A build against the main SDK is not live qualification.
 The exact stock worker product, plugin host integration, denied admission,
-cleanup and real desktop conversation must be verified before recording a new
-demo. Until then the README shows an explicitly labeled architecture preview.
+cleanup and real desktop conversation were verified for the published demo.
+Future runtime/image changes require renewed qualification; the live result is
+limited to the pins and workflow in the acceptance summary.
 
 See [the implementation and acceptance gates](../V0_TOKEN_JOIN.md).
 
@@ -68,3 +70,14 @@ capped at 256 entries and a partial-snapshot flag marks truncation. Error text,
 model paths and arbitrary lifecycle strings are never returned. Missing fields
 remain unknown. Neither these counters nor a worker's serving flag bypass the
 selected-mesh discovery and owner-routed canary gates.
+
+
+### Bounded download recovery
+
+A failed model download can restart its stock worker process once, retaining the
+explicit node key, partial cache and original deadline. The old process group is
+reaped and a changed identity is refused. Known authentication, disk, memory and
+native-runtime errors are not recovery triggers. The live accepted run exercised
+this recovery before its canary and two chat turns. It does not create another
+rental or reset the durable provisioning claim. Request-level retries remain
+disabled and the transfer reserve covers two model download paths.

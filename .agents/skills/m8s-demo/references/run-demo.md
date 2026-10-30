@@ -105,8 +105,11 @@ responses, signed log URLs, SSH stdin frames, native private material or keys.
 The run arms independent cleanup before consuming the durable CREATE claim.
 Do not repeat the command or reuse/reset its directory after failure.
 
-The successful path verifies certificate delivery, discovers the exact served
-model through the owner client, requests inference, then destroys the resource.
+The certified path verifies certificate delivery before discovering the exact
+served model and requesting owner-routed inference. Token-only v0 instead verifies
+the selected mesh, sole intended worker and exact model canary; it always reports
+`certificate_verified: false` and never claims owner-certified admission. Both
+paths then destroy the resource.
 Only after independent provider-confirmed absence does it release the completion.
 Retain `demo-evidence.json`, `cleanup-evidence.json`, `preflight-evidence.json`,
 `watchdog.events.jsonl`, and `state.db` privately. Do not publish the whole run

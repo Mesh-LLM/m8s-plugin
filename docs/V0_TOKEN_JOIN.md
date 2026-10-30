@@ -85,14 +85,16 @@ metadata patch is a substitute. The official `v0.78.1` release resolved to a
 commit outside the checked main tip's ancestry, so it was not accepted as a main
 qualification artifact. The matching main product was built and its worker passed local qualification;
 [the build contract](../deploy/container/stock-image.json) records its published digest.
-Remote GPU acceptance remains a separate gate.
+The pinned product subsequently passed remote GPU acceptance; see
+[V0_ACCEPTANCE.md](V0_ACCEPTANCE.md). Future image changes retain a separate
+qualification gate appropriate to their scope.
 
 The actual stock-main plugin handshake and a read-only MCP status call passed;
-see [the validation checkpoint](V0_VALIDATION.md). Before declaring v0 complete, test denied
+see [the validation checkpoint](V0_VALIDATION.md). The completed acceptance included checks for denied
 admission, wrong SSH identity, cancellation, stale target, quote replay and cleanup
-uncertainty; qualify the exact image; perform a newly authorized bounded rental,
-real app conversation, and provider-confirmed destruction; then replace the demo
-and add a sanitized acceptance summary. The historical GIF remains historical.
+uncertainty, exact-image qualification, a bounded rental, real app conversation,
+and provider-confirmed destruction. The reviewed recording and sanitized
+acceptance summary are now published. Future changes must preserve those gates.
 
 Owner certificate issuance follow-up:
 https://github.com/Mesh-LLM/m8s-plugin/issues/1
@@ -105,7 +107,8 @@ also does not include the SM120 devices required by the current Qwen profile.
 It cannot be substituted or relabeled. A matching stock-main Linux CUDA/SM120
 product has now been built without altering upstream source or packaging policy.
 Its image passed local SSH checks and anonymous digest access. Native GPU execution,
-real download behavior and provider-confirmed cleanup remain live acceptance gates.
+real download behavior and provider-confirmed cleanup passed for the exact live
+image recorded in V0_ACCEPTANCE.md; they remain gates for future native changes.
 
 The Mac's default Rust 1.92 compiler rejects main's `AtomicUsize::try_update`.
 The unmodified main host and console built successfully using the installed

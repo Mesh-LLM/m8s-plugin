@@ -68,7 +68,7 @@ Protocol references: [Vast destroy instance API](https://docs.vast.ai/api-refere
 and [official CLI exact-instance lookup](https://github.com/vast-ai/vast-cli/blob/master/vast.py).
 The opt-in prototype subsequently demonstrated exact-resource destruction and
 independent absence on historical instance; see
-`deploy/container/demo-proof.json`. That result does not qualify unrestricted
+the privately retained demo receipt ([historical evidence scope](../../../../docs/HISTORICAL_EVIDENCE.md)). That result does not qualify unrestricted
 provider mapping, general pagination, or every failure mode.
 
 ### Remaining inventory and launch gaps

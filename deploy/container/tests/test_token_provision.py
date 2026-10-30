@@ -48,25 +48,30 @@ class TokenProvisionTests(unittest.TestCase):
             self.assertFalse((root / 'join-token').exists())
             self.assertTrue((root / 'provision-consumed').exists())
     def test_denied_admission_and_interruption_stop_worker_and_erase_token(self):
-        for interrupted, already_exited in ((False, False), (True, False), (False, True)):
+        for interrupted, already_exited in ((None, False), (target.signal.SIGTERM, False), (target.signal.SIGHUP, False), (None, True)):
             with self.subTest(interrupted=interrupted, already_exited=already_exited), tempfile.TemporaryDirectory() as directory:
                 root=Path(directory);(root/'instance-id').write_text('123')
                 config=self.config();config['lifetime_seconds']=2
                 child=Mock(pid=456);child.poll.return_value=1 if already_exited else None
-                opener=Mock();opener.open.side_effect=OSError('synthetic denied/unready endpoint')
+                handlers = {}
+                def probe(*args, **kwargs):
+                    if interrupted:
+                        handlers[interrupted](interrupted, None)
+                    raise OSError('synthetic denied/unready endpoint')
+                opener=Mock();opener.open.side_effect=probe
                 output=io.StringIO()
                 with patch.object(target.common,'ROOT',root), \
                      patch.object(target.os,'geteuid',return_value=target.common.UID), \
                      patch.dict(target.os.environ,{'SSH_ORIGINAL_COMMAND':'join-v0','CONTAINER_API_KEY':'synthetic-instance-secret'}), \
-                     patch.object(target.signal,'alarm'), patch.object(target.signal,'signal'), \
+                     patch.object(target.signal,'alarm'), patch.object(target.signal,'signal',side_effect=lambda sig, handler: handlers.update({sig: handler})), \
                      patch.object(target.sys,'stdin',type('Input',(),{'buffer':io.BytesIO(self.frame(config))})()), \
                      patch.object(target.sys,'stdout',output), \
                      patch.object(target.subprocess,'Popen',return_value=child) as spawn, \
                      patch.object(target.urllib.request,'build_opener',return_value=opener), \
                      patch.object(target.time,'monotonic',side_effect=[0,0.5,3]), \
-                     patch.object(target.time,'sleep',side_effect=InterruptedError() if interrupted else None), \
+                     patch.object(target.time,'sleep'), \
                      patch.object(target.os,'killpg') as kill:
-                    with self.assertRaises(InterruptedError if interrupted else ValueError):target.receive()
+                    with self.assertRaises(target.WorkerStopped if interrupted else ValueError):target.receive()
                 self.assertEqual(spawn.call_args.kwargs['env']['MESH_HF_RETRY_MAX_ATTEMPTS'],'0')
                 self.assertEqual(spawn.call_args.kwargs['env']['HF_XET_CLIENT_RETRY_MAX_ATTEMPTS'],'0')
                 self.assertEqual(spawn.call_args.kwargs['env']['MESH_LLM_NO_DEFAULT_PLUGINS'],'1')

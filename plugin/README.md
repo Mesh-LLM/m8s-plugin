@@ -1,7 +1,8 @@
 # m8s Mesh plugin
 
 Experimental `compute` tool for the versioned `m8s.operator/v0` interface, plus
-legacy read-only controller `status`. Stock-Mesh live acceptance is pending.
+legacy read-only controller `status`. The pinned stock-Mesh workflow passed
+[live acceptance](../docs/V0_ACCEPTANCE.md).
 
 `compute` accepts exactly one operation:
 
@@ -58,5 +59,6 @@ set `M8S_CONTROL_SOCKET` to the owner controller socket.
 
 The SDK pin is upstream main `2809443345ea8134db62a8b433f5bb2bb5f1d123`.
 Actual stock-main host registration and an MCP status call passed; see
-[the validation checkpoint](../docs/V0_VALIDATION.md). Paid end-to-end acceptance
-remains pending.
+[the validation checkpoint](../docs/V0_VALIDATION.md). The shared operation adapter
+subsequently passed real app booking, canary, two chat turns and independently
+confirmed cleanup; see [acceptance scope](../docs/V0_ACCEPTANCE.md).

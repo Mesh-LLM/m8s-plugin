@@ -63,3 +63,18 @@ Validation: full serial `scripts/check`, strict workspace/plugin Clippy, 53
 container tests, seven plugin tests, UI lint/build and 52 mocked browser tests.
 The exact worker also passed SSH refusal, cancellation, deadline and anonymous
 image-pull checks. Local tests alone were not substituted for live acceptance.
+
+
+## Post-review supervisor fix
+
+CodeRabbit identified that Python's `InterruptedError` is an `OSError`, so a stop
+signal during the status probe could be swallowed as a network error. The updated
+supervisor uses a separate `WorkerStopped` exception. Regression tests invoke the
+actual registered SIGTERM/SIGHUP handlers during the probe, verify propagation,
+process-group reaping and token erasure, and failed before the fix.
+
+The current image in `stock-image.json` contains this narrow supervisor fix and
+passed fresh SSH refusal/cancellation/deadline and anonymous digest-pull checks.
+Its stock Mesh product is unchanged. The live recording and GPU acceptance above
+retain their original image pin (`live_accepted_image`); the new supervisor image
+has not been re-rented and is not being relabeled as that recorded run.

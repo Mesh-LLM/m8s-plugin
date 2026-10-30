@@ -1,22 +1,20 @@
-# Desktop demo status
+# Desktop demo
 
-The personal [m8s-app](https://github.com/joabzzz/m8s-app) is the interface used for
-fleet browsing, provider setup, hardware details, chat and removal. The v0 branch
-adds an opt-in adapter to the plugin's shared `m8s.operator/v0` contract.
+The personal [m8s-app](https://github.com/joabzzz/m8s-app) recorded the real shared
+`m8s.operator/v0` workflow: browse a provider, review a fresh offer, book one GPU
+into the selected passive private mesh, inspect hardware, complete the Qwen 27B
+canary and two chat turns, and remove the rental. A separate provider query
+confirmed complete empty instance and volume inventories.
 
-**A successful stock-main end-to-end recording is not yet available.** The earlier
-Qwen recording used a private runtime fork and dedicated certified owner client.
-Subsequent current-mesh attempts established attachment and removal, but did not
-complete the required inference canary. A failed new capture was preserved
-privately and deliberately not substituted for the old successful recording.
+[Watch the demo](assets/qwen27-demo.mp4) · [Compact GIF](assets/qwen27-demo.gif) ·
+[Acceptance evidence and pins](V0_ACCEPTANCE.md)
 
-The old MP4/GIF were removed from this plugin tree to avoid presenting them as
-v0 evidence. They remain in the personal repository and historical archive; no
-Git history was rewritten. See [historical scope](HISTORICAL_EVIDENCE.md).
+The recording uses stock main and explicit token-only provider-trusted admission,
+not owner-certified worker admission. Waits are shortened, operational IDs are
+redacted, and the brief peer-discovery lag after provider removal is disclosed.
+Future source/runtime/image changes require qualification appropriate to their
+scope; the recording proves the exact pins in the acceptance summary.
 
-Replace this page with a reviewed sanitized receipt and a real recording only
-after the [v0 acceptance gates](V0_TOKEN_JOIN.md) pass. Capture the actual shared
-plugin workflow: select a mesh, review a live offer, rent within an explicit
-budget, inspect the admitted worker, complete two inference turns, and observe
-provider-confirmed removal. Shortened waits must be labeled; mock UI cannot
-stand in for GPU proof.
+The previous private-fork certified MP4/GIF were removed from this plugin tree
+after private preservation. They are not stock-v0 evidence. No Git history was
+rewritten; see [historical scope](HISTORICAL_EVIDENCE.md).

@@ -361,3 +361,19 @@ latest checks passed: 53 container tests, full serial workspace checks, strict
 Clippy, seven plugin tests, and 52 UI tests with lint/build. No paid resources
 remain. Accounting and raw evidence remain private; uncertain reservations remain
 retained. See [V0_ACCEPTANCE.md](V0_ACCEPTANCE.md) for the concise final result.
+
+
+## Final review follow-up
+
+CodeRabbit's full review completed with seven actionable findings. The runbook
+now separates certified and token-only success gates; removed receipt references
+point to the private historical evidence scope; status documentation matches the
+accepted run; and the minimal build context includes `token_status.py`.
+
+A stop request during the status probe now raises `WorkerStopped`, outside the
+probe's handled I/O exceptions. The actual registered SIGTERM and SIGHUP handlers
+are exercised by the regression test. All 53 container tests pass. A rebuilt
+supervisor-only image passed exact-image refusal, cancellation, deadline and
+anonymous-pull checks. The native stock product and recorded GPU image are
+unchanged; the current and live-accepted image pins are recorded separately.
+CI now also checks formatting, tests and Clippy for the standalone plugin crate.
