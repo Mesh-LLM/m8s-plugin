@@ -34,6 +34,25 @@ Package: `sh plugin/package.sh`, then install with stock Mesh:
 mesh-llm plugins install --archive plugin/target/m8s-0.1.0.tar.gz --name m8s --version 0.1.0
 ```
 
+Enable the installed plugin in the selected stock Mesh config:
+
+```toml
+[[plugin]]
+name = "m8s"
+enabled = true
+```
+
+Export `M8S_CLI` and `M8S_V0_PLAN` before starting that host. The plan can be
+prepared from [the inert token-only template](../docs/v0-plan.template.json);
+replace its placeholders only after reconciling the operator's budget and
+selecting a qualified stock worker image. Keep the plan and join token private.
+Start or select a model-free private client, bind the target file to that exact
+node and mesh, then request offers and a fresh quote. `launch` consumes that quote
+only once. Poll `status` for actual canary verification and use `remove` to
+request cleanup; wait for provider-confirmed removal. Never retry a failed
+launch by deleting its intent or accounting files. See the
+[v0 runbook](../docs/V0_TOKEN_JOIN.md) for admission and cleanup limits.
+
 The controller executable is configured separately. For legacy status only,
 set `M8S_CONTROL_SOCKET` to the owner controller socket.
 

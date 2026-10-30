@@ -49,8 +49,13 @@ restricted `join-v0` SSH command, stock worker supervisor, and shared
 changes, not a successful live demonstration. The existing certified mode is
 preserved and cannot silently fall back to token mode.
 
-Prepare a fresh private plan from the inert template only after reconciling
-existing attempt liabilities. Keep all established budget fields; add
+Prepare a fresh private plan from [the inert v0 template](v0-plan.template.json)
+only after reconciling
+existing attempt liabilities. Its zero budgets, unknown accounting status and
+unqualified image placeholder deliberately prevent launch. Never substitute the
+historical private-fork image. Create the private `control_directory` with mode
+0700; leave the fresh attempt `directory` nonexistent. Use canonical absolute paths
+and mode 0600 for plan, target and join files. Keep all established budget fields; add
 `"token_target": "/absolute/private/target.json"` and omit `attachment`. The target
 file is private, operator-selected JSON:
 
