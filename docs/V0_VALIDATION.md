@@ -192,3 +192,46 @@ Clippy passed. Two default parallel runs failed existing private-file staging
 checks, while an isolated reproduction and the complete serial run passed.
 The concurrency-sensitive failures remain unresolved; serial success is not a
 claim that the default parallel suite is stable. No file-safety check was relaxed.
+
+
+## Diagnostic attempt: older app runtime loses its relay slot
+
+The next bounded attempt used the diagnostic image. It reached pinned SSH,
+started stock Mesh, exposed the worker API and grew the cache to approximately
+16.5 GB with no remaining incomplete files. It still did not report the selected
+mesh identity or complete a canary. Cache counters do not establish successful
+model loading or GPU inference.
+
+The owner app log reported: “Another endpoint connected with the same endpoint
+id. No more messages will be received.” The duplicated endpoint matched the
+selected app node. In the app's older embedded runtime, owner-control and main
+mesh endpoints register the same identity with the relay. Stock main's
+`mesh/node.rs::maybe_start_control_listener` already fixes this: owner-control
+uses its direct endpoint without registering a second relay connection, leaving
+the main mesh endpoint's relay slot intact. This is a concrete defect and a
+plausible explanation for local-only admission success; the complete remote
+failure is not resolved until retested with the updated app.
+
+The attempt was stopped early through Remove compute. Exact-resource cleanup
+and a separate full empty provider inventory passed. Its 1,974,743 micro-USD
+reservation is retained along with the earlier 1,948,965: total new uncertain
+liability 3,923,708, remaining authorized allowance 2,076,292. Neither amount is a
+settled invoice. There is no active rental. All consumed claims and private
+capture/accounting evidence remain preserved. The app stock-main process integration and
+live acceptance remain pending; the draft PRs must not be merged yet.
+
+
+Current main cannot be embedded directly beside the app's pinned Goose build:
+their native SQLite dependencies conflict. The explicit v0 app profile is being
+adapted to own a stock-main passive local process instead. Its UI/proxy/plugin
+remain bound to that process, and owner authentication stays enabled. No Mesh
+source patch or relay/TLS policy relaxation is used. See the app's ADR 002 for
+the process boundary and validation requirements.
+
+
+The rebuilt app's stock-process path passed Rust tests and strict Clippy. A real
+local check reported stock `0.78.0+g280944`, verified local owner identity, matching
+mesh IDs and one peer on each side, working plugin status, no duplicate-relay
+registration error, and confirmed shutdown of the owned stock process. It made
+no provider calls and created no rental. The reproducible harness is the app's
+`scripts/check-stock-node.mjs`. Remote qualification is still outstanding.
