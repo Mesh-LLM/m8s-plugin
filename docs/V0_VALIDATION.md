@@ -26,6 +26,9 @@ Stock GPU inference and the replacement desktop recording remain unverified.
   it through `plugins install --archive`, discovered `m8s.compute` from the local
   plugin store, and completed the MCP status call. No command-path override was
   used for this installed-package check; the isolated host stopped afterward.
+  A further installed-package MCP check passed live `status`, `offers` and
+  `quote` operations through stock main. The quote was bound to that main node
+  and within the selected budget; no launch intent or rental was created.
 - The shared quote operation now estimates compute, storage, the 64 GB transfer
   reserve, cleanup and contingency before returning a booking quote. Tests cover
   lifetime/monthly/hourly limits, missing prices, expiry and insufficient cleanup;
@@ -100,7 +103,8 @@ allows only its reviewed CUDA redistributables. The next build uses upstream's
 existing `-DGGML_CUDA_NCCL=OFF` CMake option for this single-GPU profile, followed
 by the unchanged packaging recipe. No source or dependency-policy patch is
 applied. The NCCL-free native runtime packaged successfully with ABI `0.1.74`;
-the upstream release UI built too. The release host and full product/image
+the upstream archive verifier passed for CUDA/x86_64, and the manifest records
+  SM120 support. The upstream release UI built too. The release host and full product/image
 qualification are still pending. The worker retains only fixed NVIDIA driver
 search paths in its otherwise isolated environment; it does not inherit the
 provider instance secret.
