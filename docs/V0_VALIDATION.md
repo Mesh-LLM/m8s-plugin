@@ -19,7 +19,8 @@ Stock GPU inference and the replacement desktop recording remain unverified.
   confirmed its isolated host stopped afterward.
 - The full root `scripts/check` passed, including the seven synthetic PTY/ACL
   tests previously excluded. Formatting and strict workspace Clippy passed too.
-  The plugin's five tests and strict Clippy passed; 45 container tests passed, including interruption/denial cleanup and
+  The plugin's five tests and strict Clippy passed; 45 container tests passed,
+  including interruption/denial cleanup and
   refusal to replay consumed provisioning and process-group cleanup after the
   host exits before its children.
 - Built the release plugin archive with `plugin/package.sh`. Stock main installed
@@ -104,7 +105,8 @@ existing `-DGGML_CUDA_NCCL=OFF` CMake option for this single-GPU profile, follow
 by the unchanged packaging recipe. No source or dependency-policy patch is
 applied. The NCCL-free native runtime packaged successfully with ABI `0.1.74`;
 the upstream archive verifier passed for CUDA/x86_64, and the manifest records
-  SM120 support. The upstream release UI built too. The release host and full product/image
+SM120 support. The unchanged upstream release-host recipe also completed,
+including its console build. Product archive creation and exact worker-image
 qualification are still pending. The worker retains only fixed NVIDIA driver
 search paths in its otherwise isolated environment; it does not inherit the
 provider instance secret.
